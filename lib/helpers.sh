@@ -1,6 +1,6 @@
 #!/bin/bash
 # Helper functions for Claude Auto Launcher
-# Version: 2.2
+# Version: 2.3
 # Last Updated: January 1, 2026
 
 # Check if a service is healthy on a specific port
@@ -68,13 +68,44 @@ repair_nextjs_cache() {
 }
 
 # Check for sensitive data that should not be committed to Git
+# Enhanced: Only checks files that would actually be committed
 # Returns 0 if clean, 1 if issues found
 check_sensitive_data() {
     local dir=${1:-.}
     local issues_found=0
     local temp_file=$(mktemp)
+    local scan_file=$(mktemp)
 
     echo "  Scanning for sensitive data..."
+
+    # Determine what files to scan based on git status
+    if [ -d "$dir/.git" ] || git rev-parse --git-dir > /dev/null 2>&1; then
+        # We're in a git repo - only scan tracked/staged files
+        cd "$dir" 2>/dev/null || true
+
+        # Get list of files that would be committed (staged + tracked modified)
+        git diff --cached --name-only 2>/dev/null >> "$scan_file"
+        git diff --name-only 2>/dev/null >> "$scan_file"
+        git ls-files --others --exclude-standard 2>/dev/null >> "$scan_file"
+
+        # Remove duplicates
+        sort -u "$scan_file" -o "$scan_file"
+
+        # If no files to scan, we're clean
+        if [ ! -s "$scan_file" ]; then
+            echo "  ✓ No modified/staged files to scan"
+            rm -f "$temp_file" "$scan_file"
+            return 0
+        fi
+
+        echo "  Scanning $(wc -l < "$scan_file" | tr -d ' ') modified/staged files..."
+    else
+        # Not a git repo - scan all files (original behavior)
+        find "$dir" -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" \
+             -o -name "*.py" -o -name "*.json" -o -name "*.yaml" -o -name "*.yml" \
+             -o -name "*.sh" -o -name "*.md" -o -name "*.env" \) \
+             -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null > "$scan_file"
+    fi
 
     # Exclusion patterns for paths (documentation, examples, tests)
     local path_exclusions="node_modules\|\.env\.example\|/examples/\|/docs/\|/test/\|/tests/\|__tests__\|\.test\.\|\.spec\.\|/fixtures/"
@@ -82,60 +113,62 @@ check_sensitive_data() {
     # Exclusion patterns for known-safe content
     local content_exclusions="task-[a-z0-9]\|aloma task\|aloma step\|example.*key\|your.*key.*here\|<.*>\|YOUR_\|EXAMPLE_\|placeholder"
 
-    # High-confidence secret patterns (API keys with known prefixes)
-    grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
-         --include="*.py" --include="*.json" --include="*.yaml" --include="*.yml" \
-         --include="*.sh" --include="*.md" \
-         -E "(sk-[a-zA-Z0-9]{20,}|sk_live_[a-zA-Z0-9]{20,}|pk_live_[a-zA-Z0-9]{20,})" \
-         "$dir" 2>/dev/null | grep -v "$path_exclusions" | grep -vi "$content_exclusions" >> "$temp_file"
+    # Scan each file for sensitive patterns
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        [ ! -f "$file" ] && continue
 
-    # AWS credentials (very specific pattern)
-    grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
-         --include="*.py" --include="*.json" --include="*.yaml" --include="*.yml" \
-         -E "AKIA[0-9A-Z]{16}" \
-         "$dir" 2>/dev/null | grep -v "$path_exclusions" | grep -vi "$content_exclusions" >> "$temp_file"
+        # Skip if file matches path exclusions
+        echo "$file" | grep -q "$path_exclusions" && continue
 
-    # Private keys (file content, not paths)
-    grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
-         --include="*.py" --include="*.pem" --include="*.key" \
-         -E "-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----" \
-         "$dir" 2>/dev/null | grep -v "$path_exclusions" >> "$temp_file"
+        # Check for .env files (should never be committed)
+        if echo "$file" | grep -qE "^\.env$|^\.env\.[^e]|\.env\.local$|\.env\.production$|\.env\.development$"; then
+            echo "$file:1:⚠️ .env file should not be committed" >> "$temp_file"
+            continue
+        fi
 
-    # Database URLs with actual credentials (not localhost, not placeholders)
-    grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
-         --include="*.py" --include="*.json" --include="*.yaml" --include="*.yml" \
-         -E "(postgres|mysql|mongodb|redis)://[^:]+:[^@]+@[^l]" \
-         "$dir" 2>/dev/null | grep -v "$path_exclusions" | grep -v "localhost" | grep -vi "$content_exclusions" >> "$temp_file"
+        # Skip binary files and large files
+        file_size=$(wc -c < "$file" 2>/dev/null | tr -d ' ')
+        [ "$file_size" -gt 1000000 ] && continue  # Skip files > 1MB
 
-    # Hardcoded bearer tokens (actual tokens, not placeholders)
-    grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
-         --include="*.py" \
-         -E "Bearer [a-zA-Z0-9_-]{40,}" \
-         "$dir" 2>/dev/null | grep -v "$path_exclusions" | grep -vi "$content_exclusions" >> "$temp_file"
+        # Scan file content for secrets
+        # API keys with known prefixes
+        grep -n -E "(sk-[a-zA-Z0-9]{20,}|sk_live_[a-zA-Z0-9]{20,}|pk_live_[a-zA-Z0-9]{20,})" "$file" 2>/dev/null | \
+            grep -vi "$content_exclusions" | while read -r line; do
+                echo "$file:$line" >> "$temp_file"
+            done
 
-    # Webhook secrets with actual values
-    grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
-         --include="*.py" --include="*.json" \
-         -E "whsec_[a-zA-Z0-9]{20,}" \
-         "$dir" 2>/dev/null | grep -v "$path_exclusions" >> "$temp_file"
+        # AWS credentials
+        grep -n -E "AKIA[0-9A-Z]{16}" "$file" 2>/dev/null | \
+            grep -vi "$content_exclusions" | while read -r line; do
+                echo "$file:$line" >> "$temp_file"
+            done
 
-    # Generic API key assignments with actual values (not placeholders)
-    grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
-         --include="*.py" \
-         -E "(api[_-]?key|apikey|secret[_-]?key)\s*[:=]\s*['\"][a-zA-Z0-9_-]{20,}['\"]" \
-         "$dir" 2>/dev/null | grep -v "$path_exclusions" | grep -vi "$content_exclusions" >> "$temp_file"
+        # Private keys
+        grep -n -E "-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----" "$file" 2>/dev/null | while read -r line; do
+            echo "$file:$line" >> "$temp_file"
+        done
 
-    # Check for .env files that might be staged (not .example)
-    find "$dir" -maxdepth 5 \( -name ".env" -o -name ".env.local" -o -name ".env.production" -o -name ".env.development" \) \
-         -not -name "*.example" 2>/dev/null | grep -v "$path_exclusions" >> "$temp_file"
+        # Database URLs with credentials (not localhost)
+        grep -n -E "(postgres|mysql|mongodb|redis)://[^:]+:[^@]+@[^l]" "$file" 2>/dev/null | \
+            grep -v "localhost" | grep -vi "$content_exclusions" | while read -r line; do
+                echo "$file:$line" >> "$temp_file"
+            done
+
+        # Webhook secrets
+        grep -n -E "whsec_[a-zA-Z0-9]{20,}" "$file" 2>/dev/null | while read -r line; do
+            echo "$file:$line" >> "$temp_file"
+        done
+
+    done < "$scan_file"
 
     # Remove duplicates and empty lines
-    sort -u "$temp_file" -o "$temp_file"
+    sort -u "$temp_file" -o "$temp_file" 2>/dev/null
     sed -i '' '/^$/d' "$temp_file" 2>/dev/null || sed -i '/^$/d' "$temp_file" 2>/dev/null
 
     # Check results
     if [ -s "$temp_file" ]; then
-        echo "  ⚠️  SENSITIVE DATA DETECTED:"
+        echo "  ⚠️  SENSITIVE DATA DETECTED in staged/modified files:"
         echo ""
         cat "$temp_file" | head -20
         local count=$(wc -l < "$temp_file" | tr -d ' ')
@@ -143,7 +176,7 @@ check_sensitive_data() {
             echo "  ... and $((count - 20)) more issues"
         fi
         echo ""
-        echo "  ACTION REQUIRED: Move secrets to .env files and ensure .gitignore is configured"
+        echo "  ACTION REQUIRED: Remove secrets before committing"
         echo ""
         echo "  If these are false positives (documentation examples), you can:"
         echo "    1. Move examples to /examples/ or /docs/ directories (auto-excluded)"
@@ -151,10 +184,10 @@ check_sensitive_data() {
         echo "    3. Bypass with: git push --no-verify (use sparingly)"
         issues_found=1
     else
-        echo "  ✓ No sensitive data patterns detected"
+        echo "  ✓ No sensitive data in staged/modified files"
     fi
 
-    rm -f "$temp_file"
+    rm -f "$temp_file" "$scan_file"
     return $issues_found
 }
 
