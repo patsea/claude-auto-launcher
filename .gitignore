@@ -1,11 +1,13 @@
 # Environment and secrets
 .env
-.env.*
-!.env.example
+.env.local
+.env.production
+.env*.local
 *.pem
 *.key
 .secret*
 credentials.json
+secrets/
 
 # OS files
 .DS_Store
