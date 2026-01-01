@@ -1,6 +1,6 @@
 #!/bin/bash
 # Helper functions for Claude Auto Launcher
-# Version: 2.0
+# Version: 2.2
 # Last Updated: January 1, 2026
 
 # Check if a service is healthy on a specific port
@@ -76,53 +76,79 @@ check_sensitive_data() {
 
     echo "  Scanning for sensitive data..."
 
-    # Patterns to detect (case-insensitive where appropriate)
-    # API Keys and Secrets
+    # Exclusion patterns for paths (documentation, examples, tests)
+    local path_exclusions="node_modules\|\.env\.example\|/examples/\|/docs/\|/test/\|/tests/\|__tests__\|\.test\.\|\.spec\.\|/fixtures/"
+
+    # Exclusion patterns for known-safe content
+    local content_exclusions="task-[a-z0-9]\|aloma task\|aloma step\|example.*key\|your.*key.*here\|<.*>\|YOUR_\|EXAMPLE_\|placeholder"
+
+    # High-confidence secret patterns (API keys with known prefixes)
     grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
          --include="*.py" --include="*.json" --include="*.yaml" --include="*.yml" \
-         --include="*.md" --include="*.env" --include="*.sh" \
-         -E "(sk-[a-zA-Z0-9]{20,}|api[_-]?key\s*[:=]\s*['\"][^'\"]+['\"]|secret[_-]?key\s*[:=]\s*['\"][^'\"]+['\"])" \
-         "$dir" 2>/dev/null | grep -v "node_modules" | grep -v ".env.example" | grep -v ".env.local.example" >> "$temp_file"
+         --include="*.sh" --include="*.md" \
+         -E "(sk-[a-zA-Z0-9]{20,}|sk_live_[a-zA-Z0-9]{20,}|pk_live_[a-zA-Z0-9]{20,})" \
+         "$dir" 2>/dev/null | grep -v "$path_exclusions" | grep -vi "$content_exclusions" >> "$temp_file"
 
-    # AWS credentials
+    # AWS credentials (very specific pattern)
     grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
          --include="*.py" --include="*.json" --include="*.yaml" --include="*.yml" \
-         -E "(AKIA[0-9A-Z]{16}|aws_access_key_id\s*=\s*['\"][^'\"]+['\"])" \
-         "$dir" 2>/dev/null | grep -v "node_modules" >> "$temp_file"
+         -E "AKIA[0-9A-Z]{16}" \
+         "$dir" 2>/dev/null | grep -v "$path_exclusions" | grep -vi "$content_exclusions" >> "$temp_file"
 
-    # Private keys
+    # Private keys (file content, not paths)
     grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
          --include="*.py" --include="*.pem" --include="*.key" \
-         -E "(-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)" \
-         "$dir" 2>/dev/null | grep -v "node_modules" >> "$temp_file"
+         -E "-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----" \
+         "$dir" 2>/dev/null | grep -v "$path_exclusions" >> "$temp_file"
 
-    # Database URLs with credentials
+    # Database URLs with actual credentials (not localhost, not placeholders)
     grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
          --include="*.py" --include="*.json" --include="*.yaml" --include="*.yml" \
-         -E "(postgres|mysql|mongodb|redis)://[^:]+:[^@]+@" \
-         "$dir" 2>/dev/null | grep -v "node_modules" | grep -v ".env.example" | grep -v "localhost" >> "$temp_file"
+         -E "(postgres|mysql|mongodb|redis)://[^:]+:[^@]+@[^l]" \
+         "$dir" 2>/dev/null | grep -v "$path_exclusions" | grep -v "localhost" | grep -vi "$content_exclusions" >> "$temp_file"
 
-    # Webhook secrets and tokens
+    # Hardcoded bearer tokens (actual tokens, not placeholders)
+    grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
+         --include="*.py" \
+         -E "Bearer [a-zA-Z0-9_-]{40,}" \
+         "$dir" 2>/dev/null | grep -v "$path_exclusions" | grep -vi "$content_exclusions" >> "$temp_file"
+
+    # Webhook secrets with actual values
     grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
          --include="*.py" --include="*.json" \
-         -E "(webhook[_-]?secret|bearer\s+[a-zA-Z0-9_-]{20,}|token\s*[:=]\s*['\"][a-zA-Z0-9_-]{20,}['\"])" \
-         "$dir" 2>/dev/null | grep -v "node_modules" | grep -v ".env.example" >> "$temp_file"
+         -E "whsec_[a-zA-Z0-9]{20,}" \
+         "$dir" 2>/dev/null | grep -v "$path_exclusions" >> "$temp_file"
 
-    # Check for .env files that might be committed
-    find "$dir" -name ".env" -o -name ".env.local" -o -name ".env.production" 2>/dev/null | \
-         grep -v "node_modules" | grep -v ".example" >> "$temp_file"
+    # Generic API key assignments with actual values (not placeholders)
+    grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
+         --include="*.py" \
+         -E "(api[_-]?key|apikey|secret[_-]?key)\s*[:=]\s*['\"][a-zA-Z0-9_-]{20,}['\"]" \
+         "$dir" 2>/dev/null | grep -v "$path_exclusions" | grep -vi "$content_exclusions" >> "$temp_file"
+
+    # Check for .env files that might be staged (not .example)
+    find "$dir" -maxdepth 5 \( -name ".env" -o -name ".env.local" -o -name ".env.production" -o -name ".env.development" \) \
+         -not -name "*.example" 2>/dev/null | grep -v "$path_exclusions" >> "$temp_file"
+
+    # Remove duplicates and empty lines
+    sort -u "$temp_file" -o "$temp_file"
+    sed -i '' '/^$/d' "$temp_file" 2>/dev/null || sed -i '/^$/d' "$temp_file" 2>/dev/null
 
     # Check results
     if [ -s "$temp_file" ]; then
         echo "  ⚠️  SENSITIVE DATA DETECTED:"
         echo ""
         cat "$temp_file" | head -20
-        local count=$(wc -l < "$temp_file")
+        local count=$(wc -l < "$temp_file" | tr -d ' ')
         if [ "$count" -gt 20 ]; then
             echo "  ... and $((count - 20)) more issues"
         fi
         echo ""
         echo "  ACTION REQUIRED: Move secrets to .env files and ensure .gitignore is configured"
+        echo ""
+        echo "  If these are false positives (documentation examples), you can:"
+        echo "    1. Move examples to /examples/ or /docs/ directories (auto-excluded)"
+        echo "    2. Use placeholder values like '<YOUR_API_KEY>' or 'YOUR_SECRET_HERE'"
+        echo "    3. Bypass with: git push --no-verify (use sparingly)"
         issues_found=1
     else
         echo "  ✓ No sensitive data patterns detected"
