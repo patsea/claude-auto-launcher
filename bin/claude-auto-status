@@ -1,0 +1,33 @@
+#!/bin/bash
+# Check status of claude-auto services
+
+PID_FILE="$HOME/.claude-auto-services.pid"
+
+if [ ! -f "$PID_FILE" ]; then
+    echo "No services running."
+    exit 0
+fi
+
+echo "Claude Auto Services Status:"
+echo ""
+
+running=0
+stopped=0
+
+while read -r pid; do
+    if ps -p "$pid" > /dev/null 2>&1; then
+        echo "  ✓ PID $pid - Running"
+        ((running++))
+    else
+        echo "  ✗ PID $pid - Stopped"
+        ((stopped++))
+    fi
+done < "$PID_FILE"
+
+echo ""
+echo "Running: $running | Stopped: $stopped"
+
+if [ $stopped -gt 0 ]; then
+    echo ""
+    echo "Some services stopped. Run 'claude-auto' to restart."
+fi

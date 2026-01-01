@@ -1,0 +1,22 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.secret*
+credentials.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Editor files
+.idea/
+.vscode/
+*.swp
+*.swo

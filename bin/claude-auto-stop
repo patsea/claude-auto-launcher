@@ -1,0 +1,22 @@
+#!/bin/bash
+# Stop all claude-auto services
+
+PID_FILE="$HOME/.claude-auto-services.pid"
+
+if [ ! -f "$PID_FILE" ]; then
+    echo "No running services found."
+    exit 0
+fi
+
+echo "Stopping Claude Auto services..."
+
+while read -r pid; do
+    if ps -p "$pid" > /dev/null 2>&1; then
+        echo "  Stopping PID $pid..."
+        kill "$pid" 2>/dev/null
+    fi
+done < "$PID_FILE"
+
+rm -f "$PID_FILE"
+
+echo "✓ All services stopped"
