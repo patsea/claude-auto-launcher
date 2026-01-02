@@ -9,7 +9,7 @@ Last Updated: January 1, 2026
 
 ## Overview
 
-Claude Auto Launcher is an all-in-one development environment launcher that automatically starts and manages multiple services for the ALOMA claude-code workspace. It provides intelligent health checking, automatic recovery, and seamless Claude Code integration.
+Claude Auto Launcher is an all-in-one development environment launcher that automatically starts and manages multiple services for your development workspace. It provides intelligent health checking, automatic recovery, and seamless Claude Code integration.
 
 ### Features
 
@@ -28,7 +28,7 @@ Claude Auto Launcher is an all-in-one development environment launcher that auto
 ### Install
 
 ```bash
-cd ~/Dropbox/aloma/claude-code/claude-auto-launcher
+cd ~/Dropbox/claude-code/claude-auto-launcher
 ./install.sh
 source ~/.bash_profile
 ```
@@ -58,7 +58,7 @@ ccode
 | **LLM Council Backend** | 8001 | FastAPI backend for multi-LLM deliberation |
 | **LLM Council Frontend** | 5173 | React/Vite interface for LLM Council |
 | **Workflow Generator** | 3001 | Node.js/Express workflow generation service |
-| **Workflow Automation** | 3000 | Next.js ALOMA/n8n workflow automation studio |
+| **Workflow Automation** | 3000 | Next.js workflow automation studio |
 
 ---
 
@@ -66,7 +66,7 @@ ccode
 
 When you run `claude-auto`, the launcher:
 
-1. **Changes directory** to `~/Dropbox/aloma/claude-code`
+1. **Changes directory** to `~/Dropbox/claude-code`
 2. **Checks health** of all 4 services (HTTP connectivity test)
 3. **Reuses healthy services** (no duplicate processes)
 4. **Kills and restarts** unhealthy or crashed services
@@ -91,7 +91,7 @@ When you run `claude-auto`, the launcher:
 
 1. Navigate to the project directory:
    ```bash
-   cd ~/Dropbox/aloma/claude-code/claude-auto-launcher
+   cd ~/Dropbox/claude-code/claude-auto-launcher
    ```
 
 2. Run the installer:
@@ -140,7 +140,7 @@ claude-auto
 ║           Claude Code Enhanced Launcher                  ║
 ╚══════════════════════════════════════════════════════════╝
 
-✓ Directory: /Users/pwilliamson/Dropbox/aloma/claude-code
+✓ Directory: /Users/pwilliamson/Dropbox/claude-code
 
 Checking Backend API...
   ✓ Backend API already running and healthy on http://localhost:8001
@@ -197,7 +197,7 @@ Stopping Claude Auto services...
 ccode
 ```
 
-Equivalent to: `cd ~/Dropbox/aloma/claude-code`
+Equivalent to: `cd ~/Dropbox/claude-code`
 
 ---
 
@@ -233,7 +233,7 @@ You can customize the claude-code directory location:
 export CLAUDE_CODE_DIR="$HOME/path/to/your/directory"
 ```
 
-Default: `$HOME/Dropbox/aloma/claude-code`
+Default: `$HOME/Dropbox/claude-code`
 
 ### Customizing Ports
 
@@ -345,23 +345,23 @@ tail -f /tmp/llm-council-backend.log
 
 1. **Missing dependencies:**
    ```bash
-   cd ~/Dropbox/aloma/claude-code/llm-council/frontend
+   cd ~/Dropbox/claude-code/llm-council/frontend
    npm install
 
-   cd ~/Dropbox/aloma/claude-code/workflow-automation
+   cd ~/Dropbox/claude-code/workflow-automation
    pnpm install
    ```
 
 2. **Python environment:**
    ```bash
-   cd ~/Dropbox/aloma/claude-code/llm-council
+   cd ~/Dropbox/claude-code/llm-council
    uv sync
    ```
 
 3. **Missing environment variables:**
    ```bash
-   ls -la ~/Dropbox/aloma/claude-code/llm-council/.env
-   ls -la ~/Dropbox/aloma/claude-code/workflow-automation/apps/web/.env.local
+   ls -la ~/Dropbox/claude-code/llm-council/.env
+   ls -la ~/Dropbox/claude-code/workflow-automation/apps/web/.env.local
    ```
 
 ### Webpages Don't Open
@@ -453,13 +453,13 @@ claude --dangerously-skip-permissions
 
 **LLM Council only:**
 ```bash
-cd ~/Dropbox/aloma/claude-code/llm-council
+cd ~/Dropbox/claude-code/llm-council
 ./start.sh
 ```
 
 **Workflow Automation only:**
 ```bash
-cd ~/Dropbox/aloma/claude-code/workflow-automation
+cd ~/Dropbox/claude-code/workflow-automation
 pnpm dev
 ```
 
@@ -467,7 +467,7 @@ pnpm dev
 
 ```bash
 # Without skipping permissions
-cd ~/Dropbox/aloma/claude-code
+cd ~/Dropbox/claude-code
 claude
 
 # With different model
@@ -514,7 +514,7 @@ ccode                 # Navigate to directory
 
 ## License
 
-Internal use for ALOMA claude-code workspace.
+Development environment launcher and service manager.
 
 ---
 

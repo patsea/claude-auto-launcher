@@ -2,13 +2,13 @@
 
 **Project**: Claude Auto Launcher
 **Type**: Development Tools / Shell Scripts
-**Working Directory**: `/Users/pwilliamson/Dropbox/aloma/claude-code/claude-auto-launcher/`
+**Working Directory**: `/Users/pwilliamson/Dropbox/claude-code/claude-auto-launcher/`
 
 ---
 
 ## Project Overview
 
-Claude Auto Launcher is a collection of shell scripts that provides an enhanced development environment launcher for the ALOMA claude-code workspace. It manages multiple services (LLM Council, Workflow Generator, Workflow Automation) with intelligent health checking and automatic recovery.
+Claude Auto Launcher is a collection of shell scripts that provides an enhanced development environment launcher for your development workspace. It manages multiple services (LLM Council, Workflow Generator, Workflow Automation) with intelligent health checking and automatic recovery.
 
 ---
 

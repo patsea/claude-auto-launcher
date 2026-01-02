@@ -1,7 +1,7 @@
 #!/bin/bash
 # Helper functions for Claude Auto Launcher
-# Version: 2.3
-# Last Updated: January 1, 2026
+# Version: 2.4
+# Last Updated: January 2, 2026
 
 # Check if a service is healthy on a specific port
 check_service_health() {
@@ -81,12 +81,16 @@ check_sensitive_data() {
     # Determine what files to scan based on git status
     if [ -d "$dir/.git" ] || git rev-parse --git-dir > /dev/null 2>&1; then
         # We're in a git repo - only scan tracked/staged files
+        local original_dir=$(pwd)
         cd "$dir" 2>/dev/null || true
 
         # Get list of files that would be committed (staged + tracked modified)
         git diff --cached --name-only 2>/dev/null >> "$scan_file"
         git diff --name-only 2>/dev/null >> "$scan_file"
         git ls-files --others --exclude-standard 2>/dev/null >> "$scan_file"
+
+        # Return to original directory
+        cd "$original_dir" 2>/dev/null || true
 
         # Remove duplicates
         sort -u "$scan_file" -o "$scan_file"
@@ -216,7 +220,9 @@ check_gitignore_patterns() {
     fi
 
     for pattern in "${required_patterns[@]}"; do
-        if ! grep -q "^${pattern}$\|^${pattern}\s" "$gitignore" 2>/dev/null; then
+        # Escape regex metacharacters in pattern for literal matching
+        local escaped_pattern=$(printf '%s\n' "$pattern" | sed 's/[.[\*^$]/\\&/g')
+        if ! grep -qE "^${escaped_pattern}$|^${escaped_pattern}\s" "$gitignore" 2>/dev/null; then
             missing_patterns+=("$pattern")
         fi
     done
@@ -251,6 +257,11 @@ preflight_checks() {
         failed=1
     fi
 
+    # Check for ALOMA references in public repos
+    if ! check_patsea_aloma_references "$dir"; then
+        failed=1
+    fi
+
     if [ $failed -eq 1 ]; then
         echo ""
         echo "  ⚠️  Pre-flight checks found issues (services will still start)"
@@ -258,4 +269,162 @@ preflight_checks() {
     fi
 
     return $failed
+}
+
+# Enhanced service health check with delayed verification
+# Usage: check_service_health_enhanced <name> <port> <pid> [expected_content_pattern]
+check_service_health_enhanced() {
+    local name="$1"
+    local port="$2"
+    local pid="$3"
+    local expected_pattern="${4:-}"
+    local max_retries=3
+    local retry_delay=5
+
+    echo "  Verifying $name..."
+
+    # Initial delay to let service fully start
+    sleep 3
+
+    for ((i=1; i<=max_retries; i++)); do
+        # Check 1: Process still running
+        if ! ps -p "$pid" > /dev/null 2>&1; then
+            echo "  ✗ $name process crashed (PID $pid not found)"
+            return 1
+        fi
+
+        # Check 2: Port still listening
+        if ! lsof -i ":$port" -sTCP:LISTEN > /dev/null 2>&1; then
+            echo "  ✗ $name not listening on port $port"
+            if [ $i -lt $max_retries ]; then
+                echo "    Retrying in ${retry_delay}s... ($i/$max_retries)"
+                sleep $retry_delay
+                continue
+            fi
+            return 1
+        fi
+
+        # Check 3: HTTP response
+        local http_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$port" 2>/dev/null)
+        if [[ "$http_code" != "200" && "$http_code" != "307" && "$http_code" != "302" ]]; then
+            echo "  ⚠️  $name returned HTTP $http_code"
+        fi
+
+        # Check 4: Expected content (if pattern provided)
+        if [ -n "$expected_pattern" ]; then
+            local response=$(curl -s "http://localhost:$port" 2>/dev/null)
+            if ! echo "$response" | grep -qiE "$expected_pattern"; then
+                echo "  ⚠️  $name missing expected content"
+                if [ $i -lt $max_retries ]; then
+                    echo "    Retrying in ${retry_delay}s... ($i/$max_retries)"
+                    sleep $retry_delay
+                    continue
+                fi
+            fi
+        fi
+
+        # Check 5: No error indicators in response
+        local response=$(curl -s "http://localhost:$port" 2>/dev/null)
+        if echo "$response" | grep -qiE "missing required|error|exception|failed to"; then
+            echo "  ⚠️  $name response contains error indicators"
+        fi
+
+        echo "  ✓ $name healthy on port $port"
+        return 0
+    done
+
+    return 1
+}
+
+# Check for required environment variables before starting
+# Usage: check_required_env <project_dir> <project_type>
+check_required_env() {
+    local dir="$1"
+    local type="$2"
+    local missing=0
+
+    case "$type" in
+        "nextauth"|"next-auth")
+            if [ -f "$dir/.env" ]; then
+                grep -q "NEXTAUTH_SECRET" "$dir/.env" || {
+                    echo "  ⚠️  Missing NEXTAUTH_SECRET in $dir/.env"
+                    missing=1
+                }
+                grep -q "NEXTAUTH_URL" "$dir/.env" || {
+                    echo "  ⚠️  Missing NEXTAUTH_URL in $dir/.env"
+                    missing=1
+                }
+            else
+                echo "  ⚠️  No .env file in $dir"
+                missing=1
+            fi
+            ;;
+        "fastapi"|"python")
+            # Add FastAPI-specific checks here
+            ;;
+    esac
+
+    return $missing
+}
+
+# Verify service didn't crash after startup
+# Usage: verify_service_stable <name> <pid> <port> <delay_seconds>
+verify_service_stable() {
+    local name="$1"
+    local pid="$2"
+    local port="$3"
+    local delay="${4:-5}"
+
+    echo "  Waiting ${delay}s to verify $name stability..."
+    sleep "$delay"
+
+    if ps -p "$pid" > /dev/null 2>&1 && lsof -i ":$port" -sTCP:LISTEN > /dev/null 2>&1; then
+        echo "  ✓ $name stable after ${delay}s"
+        return 0
+    else
+        echo "  ✗ $name crashed within ${delay}s of startup"
+        return 1
+    fi
+}
+
+# Check for ALOMA references in patsea (public) repos
+# These repos should not contain company/project branding
+check_patsea_aloma_references() {
+    local dir="${1:-.}"
+    local issues_found=0
+
+    # Only check if this is a patsea repo
+    local remote_url=$(cd "$dir" && git remote get-url origin 2>/dev/null || echo "")
+
+    if [[ "$remote_url" != *"patsea"* ]]; then
+        # Not a patsea repo, skip check
+        return 0
+    fi
+
+    echo "  Checking for ALOMA references in public repo..."
+
+    # Search for ALOMA/aloma references (case insensitive)
+    # Exclude the legitimate command patterns "aloma task" and "aloma step"
+    # Exclude this helpers.sh file itself (contains the check function with ALOMA in comments)
+    local aloma_refs=$(grep -rni "aloma" "$dir" \
+        --include="*.py" --include="*.ts" --include="*.tsx" --include="*.js" \
+        --include="*.sh" --include="*.md" --include="*.json" --include="*.yaml" \
+        --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=venv \
+        --exclude-dir=__pycache__ --exclude-dir=.next --exclude-dir=dist \
+        2>/dev/null | grep -v "Binary file" | grep -v "aloma task\|aloma step" | grep -v "lib/helpers.sh\|check_patsea_aloma")
+
+    if [ -n "$aloma_refs" ]; then
+        echo "  ⚠️  ALOMA REFERENCES DETECTED in public repo:"
+        echo ""
+        echo "$aloma_refs" | head -20
+        echo ""
+        echo "  Public repos (patsea/*) should not contain ALOMA branding."
+        echo "  Please remove or replace these references before pushing."
+        echo ""
+        issues_found=1
+    else
+        echo "  ✓ No ALOMA references in public repo"
+    fi
+
+    return $issues_found
 }

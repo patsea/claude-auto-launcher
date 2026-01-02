@@ -49,7 +49,7 @@ else
 
 # Claude Auto Launcher
 # Quick navigation to Dropbox claude-code directory
-alias ccode='cd ~/Dropbox/aloma/claude-code'
+alias ccode='cd ~/Dropbox/claude-code'
 
 # Add Claude Auto Launcher to PATH
 export PATH="$HOME/.claude-auto/bin:$PATH"

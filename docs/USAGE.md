@@ -3,7 +3,7 @@
 **Last Updated**: January 1, 2026
 
 The `claude-auto` command provides an all-in-one launcher with intelligent health checking that:
-1. Sets the working directory to `~/Dropbox/aloma/claude-code`
+1. Sets the working directory to `~/Dropbox/claude-code`
 2. **Checks if services are already running and healthy**
 3. **Skips starting healthy services** (no duplicate processes)
 4. **Kills and restarts unhealthy services** automatically
@@ -65,7 +65,7 @@ Cleanly stops all background services started by `claude-auto`.
 claude-auto
 
 # What it does:
-# 1. cd ~/Dropbox/aloma/claude-code
+# 1. cd ~/Dropbox/claude-code
 # 2. Starts llm-council backend (Python/FastAPI)
 # 3. Starts llm-council frontend (React/Vite)
 # 4. Starts workflow-generator (Node.js/Express)
@@ -82,7 +82,7 @@ claude-auto
 ║           Claude Code Enhanced Launcher                  ║
 ╚══════════════════════════════════════════════════════════╝
 
-✓ Directory: /Users/pwilliamson/Dropbox/aloma/claude-code
+✓ Directory: /Users/pwilliamson/Dropbox/claude-code
 
 Checking Backend API...
   ✓ Backend API already running and healthy on http://localhost:8001
@@ -106,7 +106,7 @@ Opening webpages...
 ║           Claude Code Enhanced Launcher                  ║
 ╚══════════════════════════════════════════════════════════╝
 
-✓ Directory: /Users/pwilliamson/Dropbox/aloma/claude-code
+✓ Directory: /Users/pwilliamson/Dropbox/claude-code
 
 Checking Backend API...
   Starting Backend API...
@@ -214,7 +214,7 @@ Running: 4 | Stopped: 0
 ccode
 
 # Equivalent to:
-cd ~/Dropbox/aloma/claude-code
+cd ~/Dropbox/claude-code
 ```
 
 ---
@@ -227,7 +227,7 @@ Once `claude-auto` is running, access these URLs:
 |---------|-----|-------------|
 | **LLM Council** | http://localhost:5173 | Multi-LLM deliberation interface |
 | **Backend API** | http://localhost:8001 | FastAPI backend for LLM Council |
-| **Workflow Automation** | http://localhost:3000 | ALOMA/n8n workflow automation studio |
+| **Workflow Automation** | http://localhost:3000 | Workflow automation studio |
 
 ---
 
@@ -321,24 +321,24 @@ tail -f /tmp/workflow-automation.log
 
 1. **Missing dependencies**:
    ```bash
-   cd ~/Dropbox/aloma/claude-code/llm-council/frontend
+   cd ~/Dropbox/claude-code/llm-council/frontend
    npm install
 
-   cd ~/Dropbox/aloma/claude-code/workflow-automation
+   cd ~/Dropbox/claude-code/workflow-automation
    pnpm install
    ```
 
 2. **Python environment not set up**:
    ```bash
-   cd ~/Dropbox/aloma/claude-code/llm-council
+   cd ~/Dropbox/claude-code/llm-council
    uv sync
    ```
 
 3. **Environment variables missing**:
    ```bash
    # Check .env files exist
-   ls -la ~/Dropbox/aloma/claude-code/llm-council/.env
-   ls -la ~/Dropbox/aloma/claude-code/workflow-automation/apps/web/.env.local
+   ls -la ~/Dropbox/claude-code/llm-council/.env
+   ls -la ~/Dropbox/claude-code/workflow-automation/apps/web/.env.local
    ```
 
 ### Webpages Don't Open
@@ -393,13 +393,13 @@ claude --dangerously-skip-permissions
 
 **LLM Council only**:
 ```bash
-cd ~/Dropbox/aloma/claude-code/llm-council
+cd ~/Dropbox/claude-code/llm-council
 ./start.sh
 ```
 
 **Workflow Automation only**:
 ```bash
-cd ~/Dropbox/aloma/claude-code/workflow-automation
+cd ~/Dropbox/claude-code/workflow-automation
 pnpm dev
 ```
 
@@ -407,11 +407,11 @@ pnpm dev
 
 ```bash
 # Without skipping permissions
-cd ~/Dropbox/aloma/claude-code
+cd ~/Dropbox/claude-code
 claude
 
 # With different options
-cd ~/Dropbox/aloma/claude-code
+cd ~/Dropbox/claude-code
 claude --model opus
 ```
 
@@ -431,7 +431,7 @@ Once services are running, you can:
    - Open http://localhost:3000
    - Describe workflow in plain English
    - Answer clarifying questions
-   - Generate ALOMA steps or n8n workflows
+   - Generate workflow automations
    - Deploy directly to platforms
 
 3. **Continue coding** with Claude Code
@@ -443,7 +443,7 @@ Once services are running, you can:
 
 ## Claude Code Best Practices
 
-**IMPORTANT**: When working in the `~/Dropbox/aloma/claude-code` directory, Claude Code should **ALWAYS** reference the following document for coding guidance:
+**IMPORTANT**: When working in the `~/Dropbox/claude-code` directory, Claude Code should **ALWAYS** reference the following document for coding guidance:
 
 **📄 CLAUDE_CODE_UNIVERSAL_BEST_PRACTICES.md**
 
@@ -462,7 +462,7 @@ When `claude-auto` launches Claude Code, it should:
 
 1. **Read the best practices document first**:
    ```
-   Read: ~/Dropbox/aloma/claude-code/CLAUDE_CODE_UNIVERSAL_BEST_PRACTICES.md
+   Read: ~/Dropbox/claude-code/CLAUDE_CODE_UNIVERSAL_BEST_PRACTICES.md
    ```
 
 2. **Follow the guidelines** for all coding operations:
@@ -497,7 +497,7 @@ pnpm tsc --noEmit
 pnpm build
 ```
 
-**Path**: `/Users/pwilliamson/Dropbox/ALOMA/claude-code/CLAUDE_CODE_UNIVERSAL_BEST_PRACTICES.md`
+**Path**: `/Users/pwilliamson/Dropbox/claude-code/CLAUDE_CODE_UNIVERSAL_BEST_PRACTICES.md`
 
 ---
 
