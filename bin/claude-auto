@@ -1,13 +1,14 @@
 #!/bin/bash
 # Claude Code Enhanced Launcher - FAST START Edition
-# Version: 2.5
-# Last Updated: January 2, 2026
+# Version: 2.6
+# Last Updated: January 3, 2026
 #
 # This script:
 # 1. Sets working directory
 # 2. Starts Claude Code IMMEDIATELY
 # 3. Runs all checks in background
-# 4. Writes status to log file for review
+# 4. Auto-converts HTTPS remotes to SSH for better authentication
+# 5. Writes status to log file for review
 
 set -e
 
@@ -26,8 +27,48 @@ BACKGROUND_LOG="/tmp/claude-auto-background.log"
 # Fast banner
 fast_banner() {
     echo "╔══════════════════════════════════════════════════════════╗"
-    echo "║        Claude Code Enhanced Launcher v2.5 (Fast)         ║"
+    echo "║        Claude Code Enhanced Launcher v2.6 (Fast)         ║"
     echo "╚══════════════════════════════════════════════════════════╝"
+}
+
+# Convert HTTPS remotes to SSH for better authentication
+convert_https_to_ssh_remotes() {
+    local log="$BACKGROUND_LOG"
+    local repos="claude-auto-launcher llm-council weekly-ai-sigint workflow-automation vibe-coding-utilities"
+
+    {
+        echo ""
+        echo "SSH Remote Conversion:"
+
+        for repo in $repos; do
+            if [ -d "$CCODE_DIR/$repo/.git" ]; then
+                cd "$CCODE_DIR/$repo"
+
+                # Get current remote URL
+                local remote_url=$(git remote get-url origin 2>/dev/null)
+
+                if [[ "$remote_url" == https://github.com/* ]]; then
+                    # Extract owner/repo from HTTPS URL
+                    local repo_path=$(echo "$remote_url" | sed 's|https://github.com/||' | sed 's|\.git$||')
+                    local ssh_url="git@github.com:${repo_path}.git"
+
+                    # Convert to SSH
+                    if git remote set-url origin "$ssh_url" 2>/dev/null; then
+                        echo "  ✓ $repo: HTTPS → SSH"
+                    else
+                        echo "  ⚠️  $repo: conversion failed"
+                    fi
+                elif [[ "$remote_url" == git@github.com:* ]]; then
+                    echo "  - $repo: already using SSH"
+                else
+                    echo "  - $repo: unknown remote type"
+                fi
+            fi
+        done
+
+        echo ""
+
+    } 2>&1 | tee -a "$log" >&2
 }
 
 # Auto-commit and push repos that pass security scan
@@ -151,6 +192,9 @@ run_background_checks() {
         echo ""
 
     } 2>&1 | tee -a "$log" >&2
+
+    # Convert HTTPS to SSH remotes before auto-commit
+    convert_https_to_ssh_remotes
 
     # Auto-commit as final step
     auto_commit_repos
