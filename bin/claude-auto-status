@@ -1,33 +1,43 @@
 #!/bin/bash
-# Check status of claude-auto services
+# Enhanced status checker with HTTP health verification
+# Version: 2.0
+# Last Updated: January 4, 2026
 
-PID_FILE="$HOME/.claude-auto-services.pid"
+# Get script directory and source helpers
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$(dirname "$SCRIPT_DIR")/lib"
 
-if [ ! -f "$PID_FILE" ]; then
-    echo "No services running."
-    exit 0
-fi
+# Source status helper functions
+source "$LIB_DIR/status-helpers.sh"
 
-echo "Claude Auto Services Status:"
+# Print header
+echo "Claude Auto Services Status"
 echo ""
 
-running=0
+# Initialize counters
+healthy=0
+degraded=0
 stopped=0
 
-while read -r pid; do
-    if ps -p "$pid" > /dev/null 2>&1; then
-        echo "  ✓ PID $pid - Running"
-        ((running++))
-    else
-        echo "  ✗ PID $pid - Stopped"
-        ((stopped++))
-    fi
-done < "$PID_FILE"
+# Check each service
+for port in 8001 5173 3001 3000; do
+    status=$(check_service_status "$port")
+    format_status_line "$port" "$status"
 
+    # Update counters
+    case "$status" in
+        healthy)  ((healthy++)) ;;
+        degraded) ((degraded++)) ;;
+        stopped)  ((stopped++)) ;;
+    esac
+done
+
+# Print summary
 echo ""
-echo "Running: $running | Stopped: $stopped"
+echo "Summary: $healthy healthy | $degraded degraded | $stopped stopped"
 
-if [ $stopped -gt 0 ]; then
+# Suggest action if needed
+if [ $stopped -gt 0 ] || [ $degraded -gt 0 ]; then
     echo ""
-    echo "Some services stopped. Run 'claude-auto' to restart."
+    echo "Run 'claude-auto' to restart services."
 fi

@@ -18,6 +18,7 @@ LIB_DIR="$(dirname "$SCRIPT_DIR")/lib"
 
 # Source helper functions
 source "$LIB_DIR/helpers.sh"
+source "$LIB_DIR/status-helpers.sh"
 
 # Configuration
 CCODE_DIR="${CLAUDE_CODE_DIR:-$HOME/Dropbox/ALOMA/claude-code}"
@@ -147,17 +148,8 @@ run_background_checks() {
         echo ""
         echo "Services:"
         for port in 8001 5173 3001 3000; do
-            case $port in
-                8001) name="Backend API" ;;
-                5173) name="LLM Council" ;;
-                3001) name="Workflow Gen" ;;
-                3000) name="Workflow Auto" ;;
-            esac
-            if lsof -i ":$port" -sTCP:LISTEN > /dev/null 2>&1; then
-                echo "  ✓ $name (port $port)"
-            else
-                echo "  ✗ $name (port $port) - NOT RUNNING"
-            fi
+            status=$(check_service_status "$port")
+            format_status_line "$port" "$status"
         done
 
         # Git status (brief)
