@@ -2,8 +2,8 @@
 
 **Enhanced startup system for Claude Code with intelligent service management**
 
-Version: 2.0
-Last Updated: January 1, 2026
+Version: 2.6 (V26 FAST BACKGROUND Edition)
+Last Updated: January 3, 2026
 
 ---
 
@@ -13,12 +13,15 @@ Claude Auto Launcher is an all-in-one development environment launcher that auto
 
 ### Features
 
+✅ **V26 Parallel Processing** - All port checks run simultaneously (4x faster)
 ✅ **Intelligent Health Checking** - Detects and reuses healthy running services
+✅ **Smart Dependency Ordering** - Backend starts first, frontends in parallel
+✅ **Enhanced PID Tracking** - JSON metadata with service names and timestamps
+✅ **Fast Background Execution** - Claude Code starts in ~1-2s
+✅ **Optimized Security Scans** - Parallel file processing for faster checks
 ✅ **Automatic Recovery** - Kills and restarts unhealthy processes
 ✅ **Multi-Service Management** - Manages 4 services simultaneously
 ✅ **Zero Configuration** - Works out of the box
-✅ **Browser Integration** - Automatically opens web interfaces
-✅ **PID Tracking** - Clean process management and cleanup
 ✅ **Log Aggregation** - Centralized logging to /tmp/
 
 ---
@@ -284,18 +287,33 @@ tail -f /tmp/llm-council-*.log /tmp/workflow-*.log
 
 ### PID File
 
-Service PIDs are tracked in: `~/.claude-auto-services.pid`
+Service PIDs are tracked in: `~/.claude-auto-services.json` (v2.6+)
 
 ```bash
-# View running PIDs
-cat ~/.claude-auto-services.pid
+# View running PIDs (JSON format with metadata)
+cat ~/.claude-auto-services.json
 
 # Example contents:
-# 12345
-# 12346
-# 12347
-# 12348
+# {
+#   "backend": {
+#     "pid": "12345",
+#     "port": "8001",
+#     "name": "Backend API",
+#     "started": "2026-01-03T21:55:00Z"
+#   },
+#   "frontend": {
+#     "pid": "12346",
+#     "port": "5173",
+#     "name": "LLM Council Frontend",
+#     "started": "2026-01-03T21:55:01Z"
+#   }
+# }
+
+# Pretty print with jq
+jq '.' ~/.claude-auto-services.json
 ```
+
+**Note:** If `jq` is not installed, a simple fallback format is used in `~/.claude-auto-services.json.simple`
 
 ### Manual Process Management
 
@@ -477,6 +495,27 @@ claude --model opus
 ---
 
 ## Version History
+
+### v2.6 (January 3, 2026) - V26 FAST BACKGROUND
+- ✅ **Parallel Port Checking** - All 4 ports checked simultaneously (4x faster)
+- ✅ **Parallel Service Startup** - Frontend services start concurrently
+- ✅ **Smart Dependency Ordering** - Backend starts first as dependency
+- ✅ **Enhanced PID Tracking** - JSON format with metadata (service names, ports, timestamps)
+- ✅ **Optimized Background Jobs** - Better job control and output management
+- ✅ **Fast Background Execution** - Claude Code starts in 1-2s (was 20-30s in v2.4)
+- ✅ **Parallel Security Scans** - Files scanned in parallel batches
+- ✅ **Better Error Messages** - Recovery suggestions for failed services
+- ✅ **Performance Metrics** - Startup time and service count displayed
+
+### v2.5 (January 2, 2026) - Fast Start Edition
+- ✅ Background checks and service startup
+- ✅ Immediate Claude Code launch
+- ✅ Delayed output to screen
+
+### v2.4 (January 2, 2026) - Comprehensive Edition
+- ✅ Pre-flight security checks
+- ✅ Cache clearing for Next.js
+- ✅ Enhanced verification
 
 ### v2.0 (January 1, 2026)
 - ✅ Added intelligent health checking

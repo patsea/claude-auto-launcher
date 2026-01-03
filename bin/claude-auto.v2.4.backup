@@ -1,0 +1,167 @@
+#!/bin/bash
+# Claude Code Enhanced Launcher with Services and Health Checks
+# Version: 2.4
+# Last Updated: January 2, 2026
+#
+# This script:
+# 1. Changes to claude-code directory
+# 2. Runs pre-flight security checks
+# 3. Proactively clears Next.js/Turbo cache to prevent corruption errors
+# 4. Checks health of existing services
+# 5. Starts llm-council (backend + frontend) if needed
+# 6. Starts workflow-generator if needed
+# 7. Starts workflow-automation if needed
+# 8. Opens webpages in browser
+# 9. Launches Claude Code with auto-approve permissions
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$(dirname "$SCRIPT_DIR")/lib"
+
+# Source helper functions
+source "$LIB_DIR/helpers.sh"
+
+# Configuration
+CCODE_DIR="${CLAUDE_CODE_DIR:-$HOME/Dropbox/ALOMA/claude-code}"
+PID_FILE="$HOME/.claude-auto-services.pid"
+
+main() {
+    echo "╔══════════════════════════════════════════════════════════╗"
+    echo "║           Claude Code Enhanced Launcher v2.3             ║"
+    echo "╚══════════════════════════════════════════════════════════╝"
+    echo ""
+
+    # Change to claude-code directory
+    cd "$CCODE_DIR" || {
+        echo "Error: Cannot access $CCODE_DIR"
+        exit 1
+    }
+    echo "✓ Directory: $(pwd)"
+
+    # Run pre-flight security checks
+    preflight_checks "$CCODE_DIR"
+
+    # Proactive cache repair for Next.js projects
+    echo ""
+    echo "Clearing build caches (proactive corruption prevention)..."
+
+    # Clear workflow-automation cache
+    if [ -d "$CCODE_DIR/workflow-automation" ]; then
+        repair_nextjs_cache "$CCODE_DIR/workflow-automation/apps/web" "Workflow Automation"
+    fi
+
+    # Clear any other Next.js projects in the directory
+    for nextconfig in $(find "$CCODE_DIR" -maxdepth 3 -name "next.config.*" -not -path "*/node_modules/*" 2>/dev/null); do
+        project_dir=$(dirname "$nextconfig")
+        if [ "$project_dir" != "$CCODE_DIR/workflow-automation/apps/web" ]; then
+            repair_nextjs_cache "$project_dir" "$(basename $(dirname $project_dir))/$(basename $project_dir)"
+        fi
+    done
+
+    echo ""
+
+    # Initialize PID tracking
+    > "$PID_FILE"  # Clear existing PID file
+
+    # Check and start Backend API (port 8001)
+    echo "Checking Backend API..."
+    if check_service_health 8001 "Backend API"; then
+        # Get PID of existing process
+        local BACKEND_PID=$(lsof -ti :8001)
+        echo "$BACKEND_PID" >> "$PID_FILE"
+    else
+        kill_port 8001
+        echo "  Starting Backend API..."
+        cd "$CCODE_DIR/llm-council" || exit 1
+        uv run python -m backend.main > /tmp/llm-council-backend.log 2>&1 &
+        local BACKEND_PID=$!
+        echo "$BACKEND_PID" >> "$PID_FILE"
+        echo "  Backend:  http://localhost:8001 (PID: $BACKEND_PID)"
+    fi
+
+    # Check and start LLM Council Frontend (port 5173)
+    echo ""
+    echo "Checking LLM Council Frontend..."
+    if check_service_health 5173 "LLM Council Frontend"; then
+        local FRONTEND_PID=$(lsof -ti :5173)
+        echo "$FRONTEND_PID" >> "$PID_FILE"
+    else
+        kill_port 5173
+        echo "  Starting LLM Council Frontend..."
+        cd "$CCODE_DIR/llm-council/frontend" || exit 1
+        npm run dev > /tmp/llm-council-frontend.log 2>&1 &
+        local FRONTEND_PID=$!
+        echo "$FRONTEND_PID" >> "$PID_FILE"
+        echo "  Frontend: http://localhost:5173 (PID: $FRONTEND_PID)"
+    fi
+
+    # Check and start Workflow Generator (port 3001)
+    echo ""
+    echo "Checking Workflow Generator..."
+    if check_service_health 3001 "Workflow Generator"; then
+        local WORKFLOW_GEN_PID=$(lsof -ti :3001)
+        echo "$WORKFLOW_GEN_PID" >> "$PID_FILE"
+    else
+        kill_port 3001
+        echo "  Starting Workflow Generator..."
+        cd "$CCODE_DIR/vibe-coding-utilities/workflow-generator" || exit 1
+        PORT=3001 npm start > /tmp/workflow-generator.log 2>&1 &
+        local WORKFLOW_GEN_PID=$!
+        echo "$WORKFLOW_GEN_PID" >> "$PID_FILE"
+        echo "  Server:   http://localhost:3001 (PID: $WORKFLOW_GEN_PID)"
+    fi
+
+    # Check and start Workflow Automation (port 3000)
+    echo ""
+    echo "Checking Workflow Automation..."
+    if check_service_health 3000 "Workflow Automation"; then
+        local WORKFLOW_AUTO_PID=$(lsof -ti :3000)
+        echo "$WORKFLOW_AUTO_PID" >> "$PID_FILE"
+    else
+        kill_port 3000
+        echo "  Starting Workflow Automation..."
+        cd "$CCODE_DIR/workflow-automation" || exit 1
+        pnpm dev > /tmp/workflow-automation.log 2>&1 &
+        local WORKFLOW_AUTO_PID=$!
+        echo "$WORKFLOW_AUTO_PID" >> "$PID_FILE"
+        echo "  Server:   http://localhost:3000 (PID: $WORKFLOW_AUTO_PID)"
+    fi
+
+    # Wait for any newly started services
+    echo ""
+    echo "Waiting for services to be ready..."
+    sleep 3
+
+    # Open webpages
+    echo "Opening webpages..."
+    open http://localhost:5173 2>/dev/null   # LLM Council
+    open http://localhost:3001 2>/dev/null   # Workflow Generator
+    open http://localhost:3000 2>/dev/null   # Workflow Automation
+
+    echo ""
+    echo "✓ All services running!"
+    echo ""
+    echo "  LLM Council:            http://localhost:5173"
+    echo "  Workflow Generator:     http://localhost:3001"
+    echo "  Workflow Automation:    http://localhost:3000"
+    echo "  Backend API:            http://localhost:8001"
+    echo ""
+    echo "  Logs:"
+    echo "    Backend:              tail -f /tmp/llm-council-backend.log"
+    echo "    Frontend:             tail -f /tmp/llm-council-frontend.log"
+    echo "    Workflow Generator:   tail -f /tmp/workflow-generator.log"
+    echo "    Workflow Automation:  tail -f /tmp/workflow-automation.log"
+    echo ""
+    echo "  Stop services: claude-auto-stop"
+    echo ""
+    echo "Starting Claude Code..."
+    echo "════════════════════════════════════════════════════════════"
+    echo ""
+
+    # Return to ccode directory and start Claude Code
+    cd "$CCODE_DIR"
+    claude --dangerously-skip-permissions
+}
+
+# Run main function
+main "$@"

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Helper functions for Claude Auto Launcher
-# Version: 2.5
+# Version: 2.4
 # Last Updated: January 2, 2026
 
 # Check if a service is healthy on a specific port

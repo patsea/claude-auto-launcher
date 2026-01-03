@@ -30,64 +30,6 @@ fast_banner() {
     echo "╚══════════════════════════════════════════════════════════╝"
 }
 
-# Auto-commit and push repos that pass security scan
-auto_commit_repos() {
-    local log="$BACKGROUND_LOG"
-    local repos="claude-auto-launcher llm-council weekly-ai-sigint workflow-automation vibe-coding-utilities"
-
-    {
-        echo ""
-        echo "Auto-commit:"
-
-        for repo in $repos; do
-            if [ -d "$CCODE_DIR/$repo/.git" ]; then
-                cd "$CCODE_DIR/$repo"
-
-                # Check if there are uncommitted changes
-                if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-                    # Run security check on staged/modified files
-                    local has_secrets=false
-                    local bad_files=""
-
-                    for file in $(git diff --name-only 2>/dev/null; git diff --cached --name-only 2>/dev/null); do
-                        if [ -f "$file" ]; then
-                            if grep -qE "sk-[a-zA-Z0-9]{20,}|AKIA[A-Z0-9]{16}|password\s*=\s*['\"][^'\"]+['\"]" "$file" 2>/dev/null; then
-                                has_secrets=true
-                                bad_files="$bad_files $file"
-                            fi
-                        fi
-                    done
-
-                    if [ "$has_secrets" = true ]; then
-                        echo "  ⚠️  $repo: SKIPPED - secrets detected in:$bad_files"
-                    else
-                        # Generate commit message
-                        local file_count=$(git status --porcelain | wc -l | tr -d ' ')
-                        local date_str=$(date +%Y-%m-%d)
-                        local msg="Auto-commit: $file_count file(s) changed [$date_str]"
-
-                        # Commit and push
-                        git add -A
-                        if git commit -m "$msg" >/dev/null 2>&1; then
-                            if git push >/dev/null 2>&1; then
-                                echo "  ✓ $repo: committed & pushed ($file_count files)"
-                            else
-                                echo "  ⚠️  $repo: committed but push failed"
-                            fi
-                        else
-                            echo "  - $repo: nothing to commit"
-                        fi
-                    fi
-                fi
-            fi
-        done
-
-        echo ""
-        echo "────────────────────────────────────────────────────────────"
-
-    } 2>&1 | tee -a "$log" >&2
-}
-
 # Background checks function - outputs to screen via tee (with delay)
 run_background_checks() {
     local log="$BACKGROUND_LOG"
@@ -149,11 +91,9 @@ run_background_checks() {
         fi
 
         echo ""
+        echo "────────────────────────────────────────────────────────────"
 
     } 2>&1 | tee -a "$log" >&2
-
-    # Auto-commit as final step
-    auto_commit_repos
 }
 
 # Start services function (background) - outputs to screen via tee (with delay)
@@ -201,12 +141,6 @@ start_services_background() {
             pnpm dev > /tmp/workflow-automation.log 2>&1 &
             echo "  → Workflow Automation starting..."
         fi
-
-        # Open browser windows
-        sleep 2
-        open http://localhost:5173 2>/dev/null || true
-        open http://localhost:3001 2>/dev/null || true
-        open http://localhost:3000 2>/dev/null || true
 
     } 2>&1 | tee -a "$log" >&2
 }
