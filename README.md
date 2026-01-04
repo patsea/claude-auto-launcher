@@ -496,16 +496,18 @@ claude --model opus
 
 ## Version History
 
-### v2.7 (January 4, 2026) - macOS Python Compatibility
+### v2.7 (January 4, 2026) - macOS Python Compatibility & Health Check Fix
 - ✅ **CRITICAL FIX: Python Command Compatibility** - Changed `python` to `python3` for macOS compatibility
 - ✅ **Virtual Environment Optimization** - Use `.venv/bin/python3` directly (no activation needed)
 - ✅ **Service Startup Reliability** - LLM Council backend now starts successfully on macOS
+- ✅ **Health Check Enhancement** - Accept 3xx redirects as healthy for port 3000 (auth-protected apps)
 - 🐛 **Fixed**: `python: command not found` error on macOS systems
 - 🐛 **Fixed**: Virtual environment activation failures in background processes
+- 🐛 **Fixed**: Workflow Automation (port 3000) incorrectly marked as unhealthy due to auth redirect
 - 📖 **Documentation**: Added Pitfall 54 to Universal Best Practices
 
 **Why This Matters:**
-macOS doesn't include a `python` command by default (only `python3`). This caused the LLM Council backend to fail startup with "command not found" errors. The fix ensures cross-platform compatibility.
+macOS doesn't include a `python` command by default (only `python3`). This caused the LLM Council backend to fail startup with "command not found" errors. Additionally, apps requiring authentication (like Workflow Automation) return 307 redirects which were incorrectly flagged as unhealthy. Both fixes ensure cross-platform compatibility and accurate health monitoring.
 
 ### v2.6 (January 3, 2026) - V26 FAST BACKGROUND
 - ✅ **Parallel Port Checking** - All 4 ports checked simultaneously (4x faster)
