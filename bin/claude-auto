@@ -1,7 +1,7 @@
 #!/bin/bash
 # Claude Code Enhanced Launcher - FAST START Edition
-# Version: 2.6
-# Last Updated: January 3, 2026
+# Version: 2.7
+# Last Updated: January 4, 2026
 #
 # This script:
 # 1. Sets working directory
@@ -209,10 +209,9 @@ start_services_background() {
         if ! lsof -i :8001 -sTCP:LISTEN > /dev/null 2>&1; then
             cd "$CCODE_DIR/llm-council"
             if [ -d ".venv" ]; then
-                source .venv/bin/activate
-                python -m backend.main > /tmp/llm-council-backend.log 2>&1 &
+                .venv/bin/python3 -m backend.main > /tmp/llm-council-backend.log 2>&1 &
             else
-                uv run python -m backend.main > /tmp/llm-council-backend.log 2>&1 &
+                uv run python3 -m backend.main > /tmp/llm-council-backend.log 2>&1 &
             fi
             echo "  → Backend API starting..."
         fi

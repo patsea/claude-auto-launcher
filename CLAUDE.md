@@ -231,8 +231,8 @@ This project is part of the larger claude-code workspace. When working here:
 
 ## Version Information
 
-- **Current Version**: 2.0
-- **Last Updated**: January 1, 2026
+- **Current Version**: 2.7
+- **Last Updated**: January 4, 2026
 - **Changelog**: See README.md "Version History" section
 
 ---
