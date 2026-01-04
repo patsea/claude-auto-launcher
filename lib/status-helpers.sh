@@ -32,7 +32,7 @@ check_service_status() {
     fi
 
     # Port is listening - check HTTP health
-    if curl -sf -o /dev/null --max-time 2 "http://localhost:$port" 2>/dev/null; then
+    if curl -sfL -o /dev/null --max-time 2 "http://localhost:$port" 2>/dev/null; then
         echo "healthy"
     else
         echo "degraded"
