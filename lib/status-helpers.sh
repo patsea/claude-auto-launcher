@@ -32,9 +32,21 @@ check_service_status() {
     fi
 
     # Port is listening - check HTTP health
-    if curl -sfL -o /dev/null --max-time 2 "http://localhost:$port" 2>/dev/null; then
+    # For port 3000 (Workflow Automation), accept 3xx redirects as healthy since it requires auth
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 "http://localhost:$port" 2>/dev/null || echo "000")
+
+    if [[ "$http_code" =~ ^2 ]]; then
+        # 2xx = success
         echo "healthy"
+    elif [[ "$port" == "3000" ]] && [[ "$http_code" =~ ^3 ]]; then
+        # Port 3000 with 3xx redirect (auth required) = healthy
+        echo "healthy"
+    elif [[ "$http_code" == "000" ]]; then
+        # Connection failed
+        echo "degraded"
     else
+        # Other error codes
         echo "degraded"
     fi
 }
