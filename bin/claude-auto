@@ -28,7 +28,7 @@ BACKGROUND_LOG="/tmp/claude-auto-background.log"
 # Fast banner
 fast_banner() {
     echo "╔══════════════════════════════════════════════════════════╗"
-    echo "║        Claude Code Enhanced Launcher v2.6 (Fast)         ║"
+    echo "║        Claude Code Enhanced Launcher v2.7 (Fast)         ║"
     echo "╚══════════════════════════════════════════════════════════╝"
 }
 
