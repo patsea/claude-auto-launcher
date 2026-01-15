@@ -1,274 +1,92 @@
 #!/bin/bash
-# Claude Code Enhanced Launcher - FAST START Edition
-# Version: 2.7
-# Last Updated: January 4, 2026
-#
-# This script:
-# 1. Sets working directory
-# 2. Starts Claude Code IMMEDIATELY
-# 3. Runs all checks in background
-# 4. Auto-converts HTTPS remotes to SSH for better authentication
-# 5. Writes status to log file for review
+# claude-auto v3.4 - Config-driven Claude Code launcher
+# v3.4: Correct permission format (no parentheses for allow-all)
 
-set -e
+set -euo pipefail
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LIB_DIR="$(dirname "$SCRIPT_DIR")/lib"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$SCRIPT_DIR/lib/config.sh"
+source "$SCRIPT_DIR/lib/helpers.sh" 2>/dev/null || true
 
-# Source helper functions
-source "$LIB_DIR/helpers.sh"
-source "$LIB_DIR/status-helpers.sh"
+STARTUP_LOG="/tmp/claude-auto-startup.log"
 
-# Configuration
-CCODE_DIR="${CLAUDE_CODE_DIR:-$HOME/Dropbox/ALOMA/claude-code}"
-BEST_PRACTICES="$CCODE_DIR/CLAUDE_CODE_UNIVERSAL_BEST_PRACTICES.md"
-BACKGROUND_LOG="/tmp/claude-auto-background.log"
-
-# Fast banner
-fast_banner() {
-    echo "╔══════════════════════════════════════════════════════════╗"
-    echo "║        Claude Code Enhanced Launcher v2.7 (Stable)         ║"
-    echo "╚══════════════════════════════════════════════════════════╝"
+print_banner() {
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║  claude-auto v3.4 - Config-Driven Claude Code Launcher       ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
 }
 
-# Convert HTTPS remotes to SSH for better authentication
-convert_https_to_ssh_remotes() {
-    local log="$BACKGROUND_LOG"
-    local repos="claude-auto-launcher llm-council weekly-ai-sigint workflow-automation vibe-coding-utilities"
-
-    {
-        echo ""
-        echo "SSH Remote Conversion:"
-
-        for repo in $repos; do
-            if [ -d "$CCODE_DIR/$repo/.git" ]; then
-                cd "$CCODE_DIR/$repo"
-
-                # Get current remote URL
-                local remote_url=$(git remote get-url origin 2>/dev/null)
-
-                if [[ "$remote_url" == https://github.com/* ]]; then
-                    # Extract owner/repo from HTTPS URL
-                    local repo_path=$(echo "$remote_url" | sed 's|https://github.com/||' | sed 's|\.git$||')
-                    local ssh_url="git@github.com:${repo_path}.git"
-
-                    # Convert to SSH
-                    if git remote set-url origin "$ssh_url" 2>/dev/null; then
-                        echo "  ✓ $repo: HTTPS → SSH"
-                    else
-                        echo "  ⚠️  $repo: conversion failed"
-                    fi
-                elif [[ "$remote_url" == git@github.com:* ]]; then
-                    echo "  - $repo: already using SSH"
-                else
-                    echo "  - $repo: unknown remote type"
-                fi
-            fi
-        done
-
-        echo ""
-
-    } 2>&1 | tee -a "$log" >&2
+ensure_claude_permissions() {
+    local settings_dir="$CLAUDE_AUTO_WORKDIR/.claude"
+    local settings_file="$settings_dir/settings.json"
+    mkdir -p "$settings_dir"
+    if [[ -f "$settings_file" ]] && grep -q '"Bash"' "$settings_file" 2>/dev/null && ! grep -q '"Bash(\*)"' "$settings_file" 2>/dev/null; then
+        echo "✅ .claude/settings.json already configured" >> "$STARTUP_LOG"
+        return
+    fi
+    cat > "$settings_file" << 'EOF'
+{
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Read",
+      "Write",
+      "Edit",
+      "mcp__desktop-commander"
+    ]
+  }
+}
+EOF
+    echo "✅ .claude/settings.json created with permissions" >> "$STARTUP_LOG"
 }
 
-# Auto-commit and push repos that pass security scan
-auto_commit_repos() {
-    local log="$BACKGROUND_LOG"
-    local repos="claude-auto-launcher llm-council weekly-ai-sigint workflow-automation vibe-coding-utilities"
-
-    {
-        echo ""
-        echo "Auto-commit:"
-
-        for repo in $repos; do
-            if [ -d "$CCODE_DIR/$repo/.git" ]; then
-                cd "$CCODE_DIR/$repo"
-
-                # Check if there are uncommitted changes
-                if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-                    # Run security check on staged/modified files
-                    local has_secrets=false
-                    local bad_files=""
-
-                    for file in $(git diff --name-only 2>/dev/null; git diff --cached --name-only 2>/dev/null); do
-                        if [ -f "$file" ]; then
-                            if grep -qE "sk-[a-zA-Z0-9]{20,}|AKIA[A-Z0-9]{16}|password\s*=\s*['\"][^'\"]+['\"]" "$file" 2>/dev/null; then
-                                has_secrets=true
-                                bad_files="$bad_files $file"
-                            fi
-                        fi
-                    done
-
-                    if [ "$has_secrets" = true ]; then
-                        echo "  ⚠️  $repo: SKIPPED - secrets detected in:$bad_files"
-                    else
-                        # Generate commit message
-                        local file_count=$(git status --porcelain | wc -l | tr -d ' ')
-                        local date_str=$(date +%Y-%m-%d)
-                        local msg="Auto-commit: $file_count file(s) changed [$date_str]"
-
-                        # Commit and push
-                        git add -A
-                        if git commit -m "$msg" >/dev/null 2>&1; then
-                            if git push >/dev/null 2>&1; then
-                                echo "  ✓ $repo: committed & pushed ($file_count files)"
-                            else
-                                echo "  ⚠️  $repo: committed but push failed"
-                            fi
-                        else
-                            echo "  - $repo: nothing to commit"
-                        fi
-                    fi
-                fi
-            fi
-        done
-
-        echo ""
-        echo "────────────────────────────────────────────────────────────"
-
-    } 2>&1 | tee -a "$log" >&2
-}
-
-# Background checks function - outputs to screen via tee (with delay)
-run_background_checks() {
-    local log="$BACKGROUND_LOG"
-
-    # Delay to let Claude Code start first, then output to screen
-    sleep 2
-
-    # Use tee to write to BOTH log file AND screen (stderr so it shows during Claude Code)
-    {
-        echo ""
-        echo "┌──────────────────────────────────────────────────────────┐"
-        echo "│  BACKGROUND CHECKS                                       │"
-        echo "└──────────────────────────────────────────────────────────┘"
-
-        # Quick service status (most important)
-        echo ""
-        echo "Services:"
-        for port in 8001 5173 3001 3000; do
-            status=$(check_service_status "$port")
-            format_status_line "$port" "$status"
-        done
-
-        # Git status (brief)
-        echo ""
-        echo "Git:"
-        cd "$CCODE_DIR"
-        for repo in claude-auto-launcher llm-council weekly-ai-sigint workflow-automation vibe-coding-utilities; do
-            if [ -d "$repo/.git" ]; then
-                cd "$repo"
-                local status=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
-                local unpushed=$(git log @{u}.. --oneline 2>/dev/null | wc -l | tr -d ' ')
-                if [ "$status" -gt 0 ] || [ "$unpushed" -gt 0 ]; then
-                    echo "  ⚠️  $repo: $status uncommitted, $unpushed unpushed"
-                else
-                    echo "  ✓ $repo"
-                fi
-                cd "$CCODE_DIR"
-            fi
-        done
-
-        # Security scan (can be slow, show last)
-        echo ""
-        echo "Security scan..."
-        cd "$CCODE_DIR"
-        local scan_result=$(check_sensitive_data "$CCODE_DIR" 2>&1)
-        if echo "$scan_result" | grep -q "SENSITIVE DATA DETECTED"; then
-            echo "  ⚠️  Sensitive data warnings - review before committing"
+start_services_if_configured() {
+    [[ ${#CLAUDE_AUTO_SERVICES[@]} -eq 0 ]] && return
+    echo "=== Service Status ===" >> "$STARTUP_LOG"
+    for service_def in "${CLAUDE_AUTO_SERVICES[@]}"; do
+        IFS=':' read -r name port start_cmd health_path <<< "$service_def"
+        if lsof -i :"$port" >/dev/null 2>&1; then
+            echo "✅ $name (port $port) - running" >> "$STARTUP_LOG"
         else
-            echo "  ✓ No sensitive data in staged files"
+            echo "🔄 Starting $name on port $port..." >> "$STARTUP_LOG"
+            (cd "$CLAUDE_AUTO_WORKDIR" && eval "$start_cmd" >> "$STARTUP_LOG" 2>&1 &)
         fi
-
-        echo ""
-
-    } 2>&1 | tee -a "$log" >&2
-
-    # Convert HTTPS to SSH remotes before auto-commit
-    convert_https_to_ssh_remotes
-
-    # Auto-commit as final step
-    auto_commit_repos
+    done
 }
 
-# Start services function (background) - outputs to screen via tee (with delay)
-start_services_background() {
-    local log="$BACKGROUND_LOG"
+open_browser_tabs() {
+    [[ ${#CLAUDE_AUTO_BROWSER_URLS[@]} -eq 0 ]] && return
+    for url in "${CLAUDE_AUTO_BROWSER_URLS[@]}"; do open "$url" 2>/dev/null || true; done
+}
 
-    # Delay to let Claude Code start first, then output to screen
-    sleep 1
-
-    {
-        echo ""
-        echo "Starting services in background..."
-
-        cd "$CCODE_DIR"
-
-        # Backend API (port 8001)
-        if ! lsof -i :8001 -sTCP:LISTEN > /dev/null 2>&1; then
-            cd "$CCODE_DIR/llm-council"
-            if [ -d ".venv" ]; then
-                .venv/bin/python3 -m backend.main > /tmp/llm-council-backend.log 2>&1 &
-            else
-                uv run python3 -m backend.main > /tmp/llm-council-backend.log 2>&1 &
-            fi
-            echo "  → Backend API starting..."
-        fi
-
-        # Frontend (port 5173)
-        if ! lsof -i :5173 -sTCP:LISTEN > /dev/null 2>&1; then
-            cd "$CCODE_DIR/llm-council/frontend"
-            npm run dev > /tmp/llm-council-frontend.log 2>&1 &
-            echo "  → LLM Council Frontend starting..."
-        fi
-
-        # Workflow Generator (port 3001)
-        if ! lsof -i :3001 -sTCP:LISTEN > /dev/null 2>&1; then
-            cd "$CCODE_DIR/vibe-coding-utilities/workflow-generator"
-            PORT=3001 npm start > /tmp/workflow-generator.log 2>&1 &
-            echo "  → Workflow Generator starting..."
-        fi
-
-        # Workflow Automation (port 3000)
-        if ! lsof -i :3000 -sTCP:LISTEN > /dev/null 2>&1; then
-            cd "$CCODE_DIR/workflow-automation"
-            pnpm dev > /tmp/workflow-automation.log 2>&1 &
-            echo "  → Workflow Automation starting..."
-        fi
-
-        # Open browser windows
-        sleep 2
-        open http://localhost:5173 2>/dev/null || true
-        open http://localhost:3001 2>/dev/null || true
-        open http://localhost:3000 2>/dev/null || true
-
-    } 2>&1 | tee -a "$log" >&2
+quick_git_status() {
+    echo "=== Quick Git Status ===" >> "$STARTUP_LOG"
+    for repo in $CLAUDE_AUTO_REPOS; do
+        [[ -d "$CLAUDE_AUTO_WORKDIR/$repo/.git" ]] || continue
+        cd "$CLAUDE_AUTO_WORKDIR/$repo"
+        changes=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+        unpushed=$(git log --oneline @{u}..HEAD 2>/dev/null | wc -l | tr -d ' ')
+        [[ "$changes" -gt 0 || "$unpushed" -gt 0 ]] && echo "⚠️  $repo: $changes uncommitted, $unpushed unpushed" >> "$STARTUP_LOG"
+    done
+    cd "$CLAUDE_AUTO_WORKDIR"
 }
 
 main() {
-    fast_banner
-
-    # Change to claude-code directory
-    cd "$CCODE_DIR" || {
-        echo "Error: Cannot access $CCODE_DIR"
-        exit 1
-    }
+    print_banner
+    load_config
+    echo "=== claude-auto startup $(date) ===" > "$STARTUP_LOG"
+    cd "$CLAUDE_AUTO_WORKDIR"
+    echo "📂 Working directory: $CLAUDE_AUTO_WORKDIR"
+    echo "📋 Status: tail -f $STARTUP_LOG"
     echo ""
-    echo "✓ Directory: $(pwd)"
-    echo "✓ Best Practices: $BEST_PRACTICES"
-
-    # Start background checks and services (will appear on screen after delay)
-    run_background_checks &
-    start_services_background &
-
-    echo ""
-    echo "Starting Claude Code..."
-    echo "(Background checks will appear below after startup)"
-    echo ""
-
-    # Start Claude Code immediately (no delay)
-    claude --dangerously-skip-permissions
+    ensure_claude_permissions
+    (sleep 1; start_services_if_configured) &
+    (sleep 2; quick_git_status) &
+    (sleep 5; open_browser_tabs) &
+    echo "🚀 Launching Claude Code..."
+    exec claude
 }
 
 main "$@"

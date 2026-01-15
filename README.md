@@ -1,270 +1,170 @@
-# Claude Auto Launcher
+# claude-auto v3.0
 
-**Enhanced startup system for Claude Code with intelligent service management**
+**Config-driven launcher for Claude Code with automated git management, service orchestration, and nightly maintenance.**
 
-Version: 2.7 (macOS Python Compatibility Edition)
-Last Updated: January 4, 2026
+Version: 3.0
+Last Updated: January 12, 2026
 
 ---
 
 ## Overview
 
-Claude Auto Launcher is an all-in-one development environment launcher that automatically starts and manages multiple services for your development workspace. It provides intelligent health checking, automatic recovery, and seamless Claude Code integration.
+Claude Auto Launcher is an all-in-one development environment launcher that automatically starts and manages multiple services for your development workspace. It provides intelligent health checking, automatic recovery, nightly maintenance, and seamless Claude Code integration.
 
 ### Features
 
-✅ **V26 Parallel Processing** - All port checks run simultaneously (4x faster)
+✅ **Config-Driven Architecture** - Customize via `~/.claude-auto.conf`, no code changes needed
+✅ **Separated Concerns** - Startup tasks vs. nightly maintenance
+✅ **Nightly Auto-Commit** - Daily backup of uncommitted work via launchd
+✅ **Slack Notifications** - Get nightly maintenance reports
+✅ **Repo Discovery** - Automatically find new git repos and suggest additions
 ✅ **Intelligent Health Checking** - Detects and reuses healthy running services
-✅ **Smart Dependency Ordering** - Backend starts first, frontends in parallel
-✅ **Enhanced PID Tracking** - JSON metadata with service names and timestamps
 ✅ **Fast Background Execution** - Claude Code starts in ~1-2s
-✅ **Optimized Security Scans** - Parallel file processing for faster checks
 ✅ **Automatic Recovery** - Kills and restarts unhealthy processes
-✅ **Multi-Service Management** - Manages 4 services simultaneously
-✅ **Zero Configuration** - Works out of the box
-✅ **Log Aggregation** - Centralized logging to /tmp/
+✅ **Multi-Service Management** - Manages multiple services simultaneously
+✅ **Security Scans** - Nightly checks for secrets in staged files
 
 ---
 
 ## Quick Start
 
-### Install
+### 1. Create Your Config
 
 ```bash
-cd ~/Dropbox/claude-code/claude-auto-launcher
-./install.sh
-source ~/.bash_profile
+cp lib/claude-auto.conf.example ~/.claude-auto.conf
+# Edit with your settings
 ```
 
-### Use
+### 2. Configure (minimum required)
 
 ```bash
-# Start everything
-claude-auto
-
-# Check status
-claude-auto-status
-
-# Stop all services
-claude-auto-stop
-
-# Navigate to directory
-ccode
+# ~/.claude-auto.conf
+CLAUDE_AUTO_WORKDIR="$HOME/path/to/your/projects"
+CLAUDE_AUTO_REPOS="repo1 repo2 repo3"
+CLAUDE_AUTO_GIT_EMAIL="you@example.com"
 ```
 
----
+### 3. Add to PATH
 
-## Services Managed
+```bash
+# Add to ~/.zshrc or ~/.bashrc
+export PATH="$PATH:$HOME/path/to/claude-auto-launcher/bin"
+```
 
-| Service | Port | Description |
-|---------|------|-------------|
-| **LLM Council Backend** | 8001 | FastAPI backend for multi-LLM deliberation |
-| **LLM Council Frontend** | 5173 | React/Vite interface for LLM Council |
-| **Workflow Generator** | 3001 | Node.js/Express workflow generation service |
-| **Workflow Automation** | 3000 | Next.js workflow automation studio |
-
----
-
-## What It Does
-
-When you run `claude-auto`, the launcher:
-
-1. **Changes directory** to `~/Dropbox/claude-code`
-2. **Checks health** of all 4 services (HTTP connectivity test)
-3. **Reuses healthy services** (no duplicate processes)
-4. **Kills and restarts** unhealthy or crashed services
-5. **Starts missing services** that aren't running
-6. **Opens web interfaces** in your default browser
-7. **Launches Claude Code** with pre-approved permissions
-8. **Tracks PIDs** for clean shutdown
-
----
-
-## Installation
-
-### Prerequisites
-
-- macOS (uses `open` command)
-- Node.js 18+ for frontend services
-- Python 3.10+ with `uv` for backend
-- Available ports: 3000, 3001, 5173, 8001
-- Modern web browser
-
-### Install Steps
-
-1. Navigate to the project directory:
-   ```bash
-   cd ~/Dropbox/claude-code/claude-auto-launcher
-   ```
-
-2. Run the installer:
-   ```bash
-   ./install.sh
-   ```
-
-3. Reload your shell:
-   ```bash
-   source ~/.bash_profile
-   ```
-
-4. Verify installation:
-   ```bash
-   which claude-auto
-   # Should output: /Users/yourusername/.claude-auto/bin/claude-auto
-   ```
-
-### What Gets Installed
-
-- **Binaries** → `~/.claude-auto/bin/`
-  - `claude-auto` - Main launcher
-  - `claude-auto-stop` - Service stopper
-  - `claude-auto-status` - Status checker
-
-- **Libraries** → `~/.claude-auto/lib/`
-  - `helpers.sh` - Shared helper functions
-
-- **Shell Configuration** → `~/.bash_profile`
-  - Adds `~/.claude-auto/bin` to PATH
-  - Creates `ccode` alias for quick navigation
-
----
-
-## Usage
-
-### Start Everything
+### 4. Run
 
 ```bash
 claude-auto
 ```
 
-**Example Output (services already running):**
-```
-╔══════════════════════════════════════════════════════════╗
-║           Claude Code Enhanced Launcher                  ║
-╚══════════════════════════════════════════════════════════╝
+---
 
-✓ Directory: /Users/pwilliamson/Dropbox/claude-code
+## Configuration Reference
 
-Checking Backend API...
-  ✓ Backend API already running and healthy on http://localhost:8001
+### Required Settings
 
-Checking LLM Council Frontend...
-  ✓ LLM Council Frontend already running and healthy on http://localhost:5173
+| Setting | Description |
+|---------|-------------|
+| `CLAUDE_AUTO_WORKDIR` | Root directory for projects |
+| `CLAUDE_AUTO_REPOS` | Space-separated repo names |
+| `CLAUDE_AUTO_GIT_EMAIL` | Email for git commits |
 
-Checking Workflow Generator...
-  ✓ Workflow Generator already running and healthy on http://localhost:3001
+### Optional Settings
 
-Checking Workflow Automation...
-  ✓ Workflow Automation already running and healthy on http://localhost:3000
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `CLAUDE_AUTO_BEST_PRACTICES` | - | Path to best practices file for Claude |
+| `CLAUDE_AUTO_SERVICES` | `()` | Array of services to start |
+| `CLAUDE_AUTO_BROWSER_URLS` | `()` | URLs to open after services start |
+| `CLAUDE_AUTO_SLACK_WEBHOOK` | - | Slack webhook for nightly reports |
+| `CLAUDE_AUTO_COMMIT_ENABLED` | false | Enable nightly auto-commit |
+| `CLAUDE_AUTO_DISCOVERY_PATHS` | - | Paths to scan for new repos |
 
-✓ All services running!
-```
+### Service Configuration
 
-### Check Status
-
-```bash
-claude-auto-status
-```
-
-**Example Output:**
-```
-Claude Auto Services Status:
-
-  ✓ PID 12345 - Running
-  ✓ PID 12346 - Running
-  ✓ PID 12347 - Running
-  ✓ PID 12348 - Running
-
-Running: 4 | Stopped: 0
-```
-
-### Stop Services
+Services are defined as an array with format `"name:port:start_command:health_path"`:
 
 ```bash
-claude-auto-stop
+CLAUDE_AUTO_SERVICES=(
+    "backend-api:8001:cd my-api && npm run dev:/health"
+    "frontend:3000:cd my-web && npm start:/"
+    "docs:3001:cd my-docs && npm run dev:/"
+)
 ```
-
-**Example Output:**
-```
-Stopping Claude Auto services...
-  Stopping PID 12345...
-  Stopping PID 12346...
-  Stopping PID 12347...
-  Stopping PID 12348...
-✓ All services stopped
-```
-
-### Navigate to Directory
-
-```bash
-ccode
-```
-
-Equivalent to: `cd ~/Dropbox/claude-code`
 
 ---
 
-## How Health Checking Works
+## Commands
 
-### Health Check Process
-
-For each service on ports 8001, 5173, 3001, 3000:
-
-1. **Port Check**: Uses `lsof` to verify port is listening
-2. **HTTP Check**: Attempts HTTP connection with 2-second timeout
-3. **Decision Logic**:
-   - ✅ **Healthy**: Port listening + HTTP responds → Skip, reuse process
-   - ⚠️ **Unhealthy**: Port listening, no HTTP → Kill and restart
-   - ❌ **Not Running**: Port not listening → Start fresh
-
-### Benefits
-
-- **No Duplicate Processes** - Won't start if already running
-- **Automatic Recovery** - Detects and fixes crashed services
-- **Faster Startup** - Skips initialization for healthy services
-- **Clean Management** - Accurate PID tracking
+| Command | Description |
+|---------|-------------|
+| `claude-auto` | Launch Claude Code + start services |
+| `claude-auto-nightly` | Run maintenance (usually via launchd) |
+| `claude-auto-stop` | Stop all managed services |
+| `claude-auto-status` | Check status of all services |
 
 ---
 
-## Configuration
+## What Happens at Startup
 
-### Environment Variables
+When you run `claude-auto`:
 
-You can customize the claude-code directory location:
+1. **Loads config** from `~/.claude-auto.conf`
+2. **Changes directory** to `CLAUDE_AUTO_WORKDIR`
+3. **Checks health** of configured services (HTTP connectivity test)
+4. **Starts missing/unhealthy services** in background
+5. **Opens browser tabs** for configured URLs
+6. **Launches Claude Code** immediately
+7. **Shows git status** for repos with uncommitted changes
+
+---
+
+## Nightly Maintenance
+
+Runs at 2 AM via launchd (macOS) or cron (Linux):
+
+- 🔗 Convert HTTPS remotes → SSH
+- 🔒 Security scan for secrets in staged files
+- 📦 Auto-commit & push (if enabled)
+- 🔍 Discover new repos and suggest additions
+- 🗑️ Clean up old log files (>7 days)
+- 📨 Send Slack summary
+
+### Install Nightly Job (macOS)
 
 ```bash
-export CLAUDE_CODE_DIR="$HOME/path/to/your/directory"
+launchctl load ~/Library/LaunchAgents/com.claude-auto.nightly.plist
 ```
 
-Default: `$HOME/Dropbox/claude-code`
+### Install Nightly Job (Linux)
 
-### Customizing Ports
-
-Edit the service start scripts if you need different ports:
-
-**Backend (port 8001)**:
 ```bash
-# Edit: llm-council/backend/main.py
-# Change: uvicorn.run(app, host="0.0.0.0", port=8001)
+crontab -e
+# Add: 0 2 * * * /path/to/bin/claude-auto-nightly
 ```
 
-**Frontend (port 5173)**:
-```bash
-# Edit: llm-council/frontend/vite.config.js
-# Add: server: { port: 5173 }
-```
+### Test Manually
 
-**Workflow Automation (port 3000)**:
 ```bash
-# Edit: workflow-automation/apps/web/package.json
-# Change dev script to: "dev": "next dev -p 3000"
+claude-auto-nightly
+cat /tmp/claude-auto-nightly-$(date +%Y-%m-%d).log
 ```
 
 ---
 
 ## Logs and Debugging
 
-### Log Files
+### Nightly Logs
+
+```bash
+# View today's nightly log
+cat /tmp/claude-auto-nightly-$(date +%Y-%m-%d).log
+
+# View launchd output
+cat /tmp/claude-auto-nightly-launchd.log
+```
+
+### Service Logs
 
 All services log to `/tmp/`:
 
@@ -272,80 +172,14 @@ All services log to `/tmp/`:
 # Watch backend logs
 tail -f /tmp/llm-council-backend.log
 
-# Watch frontend logs
-tail -f /tmp/llm-council-frontend.log
-
-# Watch workflow generator logs
-tail -f /tmp/workflow-generator.log
-
-# Watch workflow automation logs
-tail -f /tmp/workflow-automation.log
-
 # Watch all logs
-tail -f /tmp/llm-council-*.log /tmp/workflow-*.log
+tail -f /tmp/*.log
 ```
 
-### PID File
-
-Service PIDs are tracked in: `~/.claude-auto-services.json` (v2.6+)
+### Check launchd Status
 
 ```bash
-# View running PIDs (JSON format with metadata)
-cat ~/.claude-auto-services.json
-
-# Example contents:
-# {
-#   "backend": {
-#     "pid": "12345",
-#     "port": "8001",
-#     "name": "Backend API",
-#     "started": "2026-01-03T21:55:00Z"
-#   },
-#   "frontend": {
-#     "pid": "12346",
-#     "port": "5173",
-#     "name": "LLM Council Frontend",
-#     "started": "2026-01-03T21:55:01Z"
-#   }
-# }
-
-# Pretty print with jq
-jq '.' ~/.claude-auto-services.json
-```
-
-**Note:** If `jq` is not installed, a simple fallback format is used in `~/.claude-auto-services.json.simple`
-
-### Manual Process Management
-
-If `claude-auto-stop` doesn't work:
-
-```bash
-# Find all related processes
-ps aux | grep -E "llm-council|workflow|uvicorn|vite|next"
-
-# Kill specific PID
-kill 12345
-
-# Force kill
-kill -9 12345
-
-# Nuclear option (kills all related processes)
-pkill -9 -f "uvicorn|vite|node"
-rm ~/.claude-auto-services.pid
-```
-
-### Port Conflicts
-
-Check what's using a port:
-
-```bash
-lsof -i :5173  # LLM Council frontend
-lsof -i :8001  # Backend API
-lsof -i :3000  # Workflow Automation
-lsof -i :3001  # Workflow Generator
-
-# Kill process on port
-kill $(lsof -t -i :5173)
+launchctl list | grep claude-auto
 ```
 
 ---
@@ -363,24 +197,35 @@ tail -f /tmp/llm-council-backend.log
 
 1. **Missing dependencies:**
    ```bash
-   cd ~/Dropbox/claude-code/llm-council/frontend
-   npm install
-
-   cd ~/Dropbox/claude-code/workflow-automation
+   cd ~/Dropbox/ALOMA/claude-code/llm-council
    pnpm install
    ```
 
 2. **Python environment:**
    ```bash
-   cd ~/Dropbox/claude-code/llm-council
+   cd ~/Dropbox/ALOMA/claude-code/llm-council
    uv sync
    ```
 
 3. **Missing environment variables:**
    ```bash
-   ls -la ~/Dropbox/claude-code/llm-council/.env
-   ls -la ~/Dropbox/claude-code/workflow-automation/apps/web/.env.local
+   ls -la .env
+   ls -la apps/web/.env.local
    ```
+
+### Port Conflicts
+
+Check what's using a port:
+
+```bash
+lsof -i :5173  # LLM Council frontend
+lsof -i :8001  # Backend API
+lsof -i :3000  # Workflow Automation
+lsof -i :3001  # Workflow Generator
+
+# Kill process on port
+kill $(lsof -t -i :5173)
+```
 
 ### Webpages Don't Open
 
@@ -388,13 +233,11 @@ tail -f /tmp/llm-council-backend.log
 ```bash
 open http://localhost:5173
 open http://localhost:3000
-open http://localhost:3001
 ```
 
 **Check if services are responding:**
 ```bash
 curl http://localhost:5173
-curl http://localhost:3000
 curl http://localhost:8001
 ```
 
@@ -407,11 +250,30 @@ claude-auto-stop
 
 **Manual cleanup:**
 ```bash
-pkill -f "llm-council"
-pkill -f "workflow"
-pkill -f "uvicorn"
-pkill -f "vite"
+pkill -f "uvicorn|vite|node"
 rm ~/.claude-auto-services.pid
+```
+
+### Nightly Job Not Running
+
+```bash
+# Check if loaded
+launchctl list | grep claude-auto
+
+# Reload
+launchctl unload ~/Library/LaunchAgents/com.claude-auto.nightly.plist
+launchctl load ~/Library/LaunchAgents/com.claude-auto.nightly.plist
+
+# Test manually
+claude-auto-nightly
+```
+
+### Test Slack Webhook
+
+```bash
+curl -X POST -H 'Content-type: application/json' \
+    --data '{"text":"Test from claude-auto"}' \
+    "$CLAUDE_AUTO_SLACK_WEBHOOK"
 ```
 
 ---
@@ -421,15 +283,53 @@ rm ~/.claude-auto-services.pid
 ```
 claude-auto-launcher/
 ├── bin/
-│   ├── claude-auto           # Main launcher script
+│   ├── claude-auto           # Main launcher (startup only)
+│   ├── claude-auto-nightly   # Nightly maintenance
 │   ├── claude-auto-stop      # Service stopper
 │   └── claude-auto-status    # Status checker
 ├── lib/
-│   └── helpers.sh            # Shared helper functions
-├── docs/
-│   └── USAGE.md              # Detailed usage documentation
+│   ├── config.sh             # Configuration loader
+│   ├── helpers.sh            # Shared helper functions
+│   └── claude-auto.conf.example  # Config template
+├── backups/                  # Previous version backups
 ├── install.sh                # Installation script
 └── README.md                 # This file
+```
+
+---
+
+## Advanced Usage
+
+### Run Without Auto-Starting Services
+
+```bash
+cd ~/Dropbox/ALOMA/claude-code
+claude
+```
+
+### Start Individual Services
+
+```bash
+# LLM Council only
+cd ~/Dropbox/ALOMA/claude-code/llm-council
+./start.sh
+
+# Workflow Automation only
+cd ~/Dropbox/ALOMA/claude-code/workflow-automation
+pnpm dev
+```
+
+### Custom Claude Code Launch
+
+```bash
+# With different model
+claude --model opus
+```
+
+### Override Config Location
+
+```bash
+CLAUDE_AUTO_CONFIG=/path/to/custom.conf claude-auto
 ```
 
 ---
@@ -440,134 +340,99 @@ claude-auto-launcher/
 # 1. Stop all services
 claude-auto-stop
 
-# 2. Remove installation directory
-rm -rf ~/.claude-auto
+# 2. Unload nightly job
+launchctl unload ~/Library/LaunchAgents/com.claude-auto.nightly.plist
+rm ~/Library/LaunchAgents/com.claude-auto.nightly.plist
 
-# 3. Edit bash profile
-nano ~/.bash_profile
-# Remove the "Claude Auto Launcher" section
+# 3. Remove config
+rm ~/.claude-auto.conf
 
-# 4. Reload shell
-source ~/.bash_profile
+# 4. Remove from PATH (edit ~/.zshrc or ~/.bashrc)
 
 # 5. Clean up logs (optional)
-rm /tmp/llm-council-*.log
-rm /tmp/workflow-*.log
+rm /tmp/claude-auto-*.log
 rm ~/.claude-auto-services.pid
 ```
 
 ---
 
-## Advanced Usage
+## Migration from v2.7
 
-### Run Without Auto-Starting Services
+v3.0 introduces config-driven architecture and separates startup from nightly tasks:
 
-```bash
-ccode
-claude --dangerously-skip-permissions
-```
+| v2.7 Behavior | v3.0 Behavior |
+|---------------|---------------|
+| Hardcoded paths in scripts | Config file at `~/.claude-auto.conf` |
+| Auto-commit on startup | Auto-commit at 2 AM via launchd |
+| HTTPS→SSH on startup | HTTPS→SSH at 2 AM via launchd |
+| Security scan on startup | Security scan at 2 AM via launchd |
+| No Slack notifications | Nightly Slack summary |
+| No repo discovery | Nightly discovery with suggestions |
 
-### Start Individual Services
-
-**LLM Council only:**
-```bash
-cd ~/Dropbox/claude-code/llm-council
-./start.sh
-```
-
-**Workflow Automation only:**
-```bash
-cd ~/Dropbox/claude-code/workflow-automation
-pnpm dev
-```
-
-### Custom Claude Code Launch
-
-```bash
-# Without skipping permissions
-cd ~/Dropbox/claude-code
-claude
-
-# With different model
-claude --model opus
-```
+**Your v2.7 implementation is backed up in `backups/v2-YYYYMMDD/`**
 
 ---
 
 ## Version History
 
-### v2.7 (January 4, 2026) - macOS Python Compatibility & Health Check Fix
-- ✅ **CRITICAL FIX: Python Command Compatibility** - Changed `python` to `python3` for macOS compatibility
-- ✅ **Virtual Environment Optimization** - Use `.venv/bin/python3` directly (no activation needed)
-- ✅ **Service Startup Reliability** - LLM Council backend now starts successfully on macOS
-- ✅ **Health Check Enhancement** - Accept 3xx redirects as healthy for port 3000 (auth-protected apps)
-- 🐛 **Fixed**: `python: command not found` error on macOS systems
-- 🐛 **Fixed**: Virtual environment activation failures in background processes
-- 🐛 **Fixed**: Workflow Automation (port 3000) incorrectly marked as unhealthy due to auth redirect
-- 📖 **Documentation**: Added Pitfall 54 to Universal Best Practices
+### v3.0 (January 12, 2026) - Config-Driven Architecture
+- ✅ **Config-Driven**: All settings in `~/.claude-auto.conf`
+- ✅ **Separated Concerns**: Startup vs. nightly maintenance
+- ✅ **Nightly Launchd Job**: Auto-commit, security scan, HTTPS→SSH at 2 AM
+- ✅ **Slack Notifications**: Daily maintenance reports
+- ✅ **Repo Discovery**: Find new repos and suggest additions
+- ✅ **Shareable**: Others can use with their own config
+- 📖 **Documentation**: Added Pitfall 61 to Universal Best Practices
 
-**Why This Matters:**
-macOS doesn't include a `python` command by default (only `python3`). This caused the LLM Council backend to fail startup with "command not found" errors. Additionally, apps requiring authentication (like Workflow Automation) return 307 redirects which were incorrectly flagged as unhealthy. Both fixes ensure cross-platform compatibility and accurate health monitoring.
+### v2.7 (January 4, 2026) - macOS Python Compatibility & Health Check Fix
+- ✅ **Python Command Compatibility** - Changed `python` to `python3` for macOS
+- ✅ **Virtual Environment Optimization** - Use `.venv/bin/python3` directly
+- ✅ **Health Check Enhancement** - Accept 3xx redirects as healthy
 
 ### v2.6 (January 3, 2026) - V26 FAST BACKGROUND
-- ✅ **Parallel Port Checking** - All 4 ports checked simultaneously (4x faster)
+- ✅ **Parallel Port Checking** - All ports checked simultaneously (4x faster)
 - ✅ **Parallel Service Startup** - Frontend services start concurrently
-- ✅ **Smart Dependency Ordering** - Backend starts first as dependency
-- ✅ **Enhanced PID Tracking** - JSON format with metadata (service names, ports, timestamps)
-- ✅ **Optimized Background Jobs** - Better job control and output management
-- ✅ **Fast Background Execution** - Claude Code starts in 1-2s (was 20-30s in v2.4)
-- ✅ **Parallel Security Scans** - Files scanned in parallel batches
-- ✅ **Better Error Messages** - Recovery suggestions for failed services
-- ✅ **Performance Metrics** - Startup time and service count displayed
+- ✅ **Enhanced PID Tracking** - JSON format with metadata
 
 ### v2.5 (January 2, 2026) - Fast Start Edition
 - ✅ Background checks and service startup
 - ✅ Immediate Claude Code launch
-- ✅ Delayed output to screen
 
 ### v2.4 (January 2, 2026) - Comprehensive Edition
 - ✅ Pre-flight security checks
 - ✅ Cache clearing for Next.js
-- ✅ Enhanced verification
 
 ### v2.0 (January 1, 2026)
 - ✅ Added intelligent health checking
 - ✅ Skip starting healthy services
 - ✅ Auto-restart unhealthy services
-- ✅ Enhanced PID tracking
-- ✅ All services use explicit localhost URLs
 
 ### v1.0 (December 29, 2025)
 - ✅ Initial release
-- ✅ Manages 4 services
-- ✅ Automatic webpage opening
-- ✅ Log file support
-- ✅ PID tracking
 
 ---
 
 ## Support
 
-**Get Help:**
-- Check logs: `/tmp/*.log`
-- View processes: `ps aux | grep -E "uvicorn|vite|node"`
-- Check ports: `lsof -i :5173 -i :8001 -i :3000 -i :3001`
-- Documentation: `docs/USAGE.md`
-
-**Common Commands:**
+**Quick Reference:**
 ```bash
 claude-auto           # Start everything
 claude-auto-status    # Check status
 claude-auto-stop      # Stop all services
-ccode                 # Navigate to directory
+claude-auto-nightly   # Run maintenance manually
 ```
+
+**Get Help:**
+- Check logs: `/tmp/claude-auto-*.log`
+- View processes: `ps aux | grep -E "uvicorn|vite|node"`
+- Check ports: `lsof -i :5173 -i :8001 -i :3000 -i :3001`
 
 ---
 
 ## License
 
-Development environment launcher and service manager.
+MIT
 
 ---
 
-**Ready to use!** Run `claude-auto` to start your enhanced development environment.
+**Ready to use!** Run `claude-auto` to start your development environment.
