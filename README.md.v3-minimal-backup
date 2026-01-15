@@ -1,0 +1,139 @@
+# claude-auto v3.0
+
+Config-driven launcher for Claude Code with automated git management, service orchestration, and nightly maintenance.
+
+## Quick Start
+
+### 1. Create Your Config
+
+```bash
+cp lib/claude-auto.conf.example ~/.claude-auto.conf
+# Edit with your settings
+```
+
+### 2. Configure (minimum required)
+
+```bash
+# ~/.claude-auto.conf
+CLAUDE_AUTO_WORKDIR="$HOME/path/to/your/projects"
+CLAUDE_AUTO_REPOS="repo1 repo2 repo3"
+CLAUDE_AUTO_GIT_EMAIL="you@example.com"
+```
+
+### 3. Add to PATH
+
+```bash
+# Add to ~/.zshrc or ~/.bashrc
+export PATH="$PATH:$HOME/path/to/claude-auto-launcher/bin"
+```
+
+### 4. Run
+
+```bash
+claude-auto
+```
+
+## Configuration Reference
+
+### Required Settings
+
+| Setting | Description |
+|---------|-------------|
+| `CLAUDE_AUTO_WORKDIR` | Root directory for projects |
+| `CLAUDE_AUTO_REPOS` | Space-separated repo names |
+| `CLAUDE_AUTO_GIT_EMAIL` | Email for git commits |
+
+### Optional Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `CLAUDE_AUTO_BEST_PRACTICES` | - | Path to best practices file |
+| `CLAUDE_AUTO_SERVICES` | `()` | Array of services to start |
+| `CLAUDE_AUTO_BROWSER_URLS` | `()` | URLs to open |
+| `CLAUDE_AUTO_SLACK_WEBHOOK` | - | Slack webhook for reports |
+| `CLAUDE_AUTO_COMMIT_ENABLED` | false | Enable nightly auto-commit |
+| `CLAUDE_AUTO_DISCOVERY_PATHS` | - | Paths to scan for new repos |
+
+### Service Format
+
+```bash
+CLAUDE_AUTO_SERVICES=(
+    "name:port:start_command:health_path"
+)
+```
+
+Example:
+```bash
+CLAUDE_AUTO_SERVICES=(
+    "api:8001:cd my-api && npm run dev:/health"
+    "web:3000:cd my-web && npm start:/"
+)
+```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `claude-auto` | Launch Claude Code + start services |
+| `claude-auto-nightly` | Run maintenance (usually via launchd) |
+
+## Nightly Maintenance
+
+Runs at 2 AM via launchd (macOS) or cron (Linux):
+
+- Convert HTTPS remotes → SSH
+- Security scan for secrets
+- Auto-commit & push (if enabled)
+- Discover new repos
+- Send Slack summary
+
+### Install (macOS)
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.claude-auto.nightly.plist
+```
+
+### Install (Linux)
+
+```bash
+crontab -e
+# Add: 0 2 * * * /path/to/bin/claude-auto-nightly
+```
+
+### Test Manually
+
+```bash
+claude-auto-nightly
+cat /tmp/claude-auto-nightly-$(date +%Y-%m-%d).log
+```
+
+## Troubleshooting
+
+### Check launchd status
+```bash
+launchctl list | grep claude-auto
+```
+
+### View logs
+```bash
+cat /tmp/claude-auto-nightly-$(date +%Y-%m-%d).log
+```
+
+### Test Slack
+```bash
+curl -X POST -H 'Content-type: application/json' \
+    --data '{"text":"Test"}' "$CLAUDE_AUTO_SLACK_WEBHOOK"
+```
+
+## Migration from v2.7
+
+v3.0 introduces config-driven architecture and separates startup from nightly tasks:
+
+1. **Backup restored**: Your v2.7 implementation is saved in `backups/v2-YYYYMMDD/`
+2. **New config**: Edit `~/.claude-auto.conf` to customize behavior
+3. **Nightly tasks**: Auto-commit and maintenance now run via launchd at 2 AM
+4. **Startup tasks**: `claude-auto` now only starts services and Claude Code
+
+## License
+
+MIT

@@ -1,0 +1,34 @@
+# claude-auto configuration
+# Copy to ~/.claude-auto.conf and customize
+
+# === REQUIRED ===
+CLAUDE_AUTO_WORKDIR="$HOME/projects"
+CLAUDE_AUTO_BEST_PRACTICES=""
+
+# === GIT REPOSITORIES ===
+# Space-separated list of repo paths to manage (relative to WORKDIR)
+CLAUDE_AUTO_REPOS=""
+
+# === SERVICES (optional) ===
+# Format: "name:port:start_command:health_endpoint"
+# Leave empty array to disable service management
+CLAUDE_AUTO_SERVICES=()
+
+# === BROWSER TABS (optional) ===
+# URLs to open after services start
+CLAUDE_AUTO_BROWSER_URLS=()
+
+# === NIGHTLY MAINTENANCE ===
+# Slack webhook for notifications (optional)
+CLAUDE_AUTO_SLACK_WEBHOOK=""
+
+# Auto-commit settings
+CLAUDE_AUTO_COMMIT_ENABLED="false"
+CLAUDE_AUTO_COMMIT_MESSAGE_PREFIX="chore: auto-commit"
+
+# Repo discovery - paths to scan for new git repos
+CLAUDE_AUTO_DISCOVERY_PATHS=""
+
+# === SECURITY ===
+# Git user for commits
+CLAUDE_AUTO_GIT_EMAIL=""

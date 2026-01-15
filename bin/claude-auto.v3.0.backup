@@ -1,0 +1,97 @@
+#!/bin/bash
+# claude-auto v3.0 - Config-driven Claude Code launcher
+# Startup tasks only - nightly tasks moved to claude-auto-nightly
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$SCRIPT_DIR/lib/config.sh"
+source "$SCRIPT_DIR/lib/helpers.sh" 2>/dev/null || true
+
+print_banner() {
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║  claude-auto v3.0 - Config-Driven Claude Code Launcher       ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+}
+
+start_services_if_configured() {
+    if [[ ${#CLAUDE_AUTO_SERVICES[@]} -eq 0 ]]; then
+        return
+    fi
+    
+    echo "=== Service Status ==="
+    for service_def in "${CLAUDE_AUTO_SERVICES[@]}"; do
+        IFS=':' read -r name port start_cmd health_path <<< "$service_def"
+        
+        if lsof -i :"$port" >/dev/null 2>&1; then
+            echo "✅ $name (port $port) - running"
+        else
+            echo "🔄 Starting $name on port $port..."
+            (cd "$CLAUDE_AUTO_WORKDIR" && eval "$start_cmd" &)
+        fi
+    done
+}
+
+open_browser_tabs() {
+    if [[ ${#CLAUDE_AUTO_BROWSER_URLS[@]} -eq 0 ]]; then
+        return
+    fi
+    
+    for url in "${CLAUDE_AUTO_BROWSER_URLS[@]}"; do
+        open "$url" 2>/dev/null || true
+    done
+}
+
+quick_git_status() {
+    echo "=== Quick Git Status ==="
+    for repo in $CLAUDE_AUTO_REPOS; do
+        if [[ -d "$CLAUDE_AUTO_WORKDIR/$repo/.git" ]]; then
+            cd "$CLAUDE_AUTO_WORKDIR/$repo"
+            changes=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+            unpushed=$(git log --oneline @{u}..HEAD 2>/dev/null | wc -l | tr -d ' ')
+            if [[ "$changes" -gt 0 ]] || [[ "$unpushed" -gt 0 ]]; then
+                echo "⚠️  $repo: $changes uncommitted, $unpushed unpushed"
+            fi
+        fi
+    done
+    cd "$CLAUDE_AUTO_WORKDIR"
+}
+
+main() {
+    print_banner
+    load_config
+    
+    cd "$CLAUDE_AUTO_WORKDIR"
+    echo "📂 Working directory: $CLAUDE_AUTO_WORKDIR"
+    echo ""
+    
+    # Background: Start services
+    (
+        sleep 1
+        start_services_if_configured
+    ) &
+    
+    # Background: Quick git status
+    (
+        sleep 2
+        quick_git_status
+    ) &
+    
+    # Background: Open browser tabs
+    (
+        sleep 5
+        open_browser_tabs
+    ) &
+    
+    # Start Claude Code
+    echo "🚀 Launching Claude Code..."
+    if [[ -n "$CLAUDE_AUTO_BEST_PRACTICES" ]] && [[ -f "$CLAUDE_AUTO_BEST_PRACTICES" ]]; then
+        exec claude
+    else
+        exec claude
+    fi
+}
+
+main "$@"

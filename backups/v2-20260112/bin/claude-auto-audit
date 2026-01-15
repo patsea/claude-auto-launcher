@@ -1,0 +1,306 @@
+#!/bin/bash
+# Claude Auto Audit - Enhanced system health check
+# Version: 2.0
+
+CCODE_DIR="${CCODE_DIR:-$HOME/Dropbox/ALOMA/claude-code}"
+EXPORT_FILE=""
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Usage
+usage() {
+    echo "Usage: claude-auto-audit [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --export FILE    Export results to file"
+    echo "  --no-color       Disable color output"
+    echo "  --help           Show this help"
+    exit 0
+}
+
+# Parse arguments
+NO_COLOR=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --export)
+            EXPORT_FILE="$2"
+            shift 2
+            ;;
+        --no-color)
+            NO_COLOR=true
+            RED=''
+            GREEN=''
+            YELLOW=''
+            BLUE=''
+            NC=''
+            shift
+            ;;
+        --help)
+            usage
+            ;;
+        *)
+            echo "Unknown option: $1"
+            usage
+            ;;
+    esac
+done
+
+# Output function
+output() {
+    echo -e "$1"
+    if [ -n "$EXPORT_FILE" ]; then
+        echo -e "$1" | sed 's/\x1b\[[0-9;]*m//g' >> "$EXPORT_FILE"
+    fi
+}
+
+# Header
+output "${BLUE}╔══════════════════════════════════════════════════════════╗${NC}"
+output "${BLUE}║         Claude Auto Audit v2.0 - Enhanced               ║${NC}"
+output "${BLUE}╚══════════════════════════════════════════════════════════╝${NC}"
+output ""
+output "${BLUE}Audit Time:${NC} $(date '+%Y-%m-%d %H:%M:%S')"
+output ""
+
+# Initialize counters
+total_checks=0
+passed_checks=0
+warnings=0
+errors=0
+
+# Check function
+check() {
+    total_checks=$((total_checks + 1))
+    if [ $1 -eq 0 ]; then
+        passed_checks=$((passed_checks + 1))
+        output "  ${GREEN}✓${NC} $2"
+    else
+        if [ "$3" = "warning" ]; then
+            warnings=$((warnings + 1))
+            output "  ${YELLOW}⚠${NC} $2"
+        else
+            errors=$((errors + 1))
+            output "  ${RED}✗${NC} $2"
+        fi
+    fi
+}
+
+# 1. VERSIONS
+output "${BLUE}## Versions${NC}"
+if [ -f "$CCODE_DIR/CLAUDE_CODE_UNIVERSAL_BEST_PRACTICES.md" ]; then
+    bp_version=$(grep "^\*\*Version\*\*:" "$CCODE_DIR/CLAUDE_CODE_UNIVERSAL_BEST_PRACTICES.md" | head -1 | awk '{print $2}')
+    output "  ${GREEN}✓${NC} Best Practices: ${GREEN}$bp_version${NC}"
+    passed_checks=$((passed_checks + 1))
+else
+    output "  ${RED}✗${NC} Best Practices: Not found"
+    errors=$((errors + 1))
+fi
+total_checks=$((total_checks + 1))
+
+if [ -f "$HOME/.claude-auto/bin/claude-auto" ]; then
+    launcher_version=$(grep "^# Version:" "$HOME/.claude-auto/bin/claude-auto" | head -1 | awk '{print $3}')
+    output "  ${GREEN}✓${NC} claude-auto: ${GREEN}$launcher_version${NC}"
+    passed_checks=$((passed_checks + 1))
+else
+    output "  ${YELLOW}⚠${NC} claude-auto: Not installed"
+    warnings=$((warnings + 1))
+fi
+total_checks=$((total_checks + 1))
+
+if [ -f "$CCODE_DIR/MASTER_README.md" ]; then
+    master_version=$(grep "^\*\*Version\*\*:" "$CCODE_DIR/MASTER_README.md" | head -1 | awk '{print $2}')
+    output "  ${GREEN}✓${NC} MASTER_README: ${GREEN}$master_version${NC}"
+    passed_checks=$((passed_checks + 1))
+else
+    output "  ${YELLOW}⚠${NC} MASTER_README: Not found"
+    warnings=$((warnings + 1))
+fi
+total_checks=$((total_checks + 1))
+
+output ""
+
+# 2. DISK SPACE
+output "${BLUE}## Disk Space${NC}"
+disk_usage=$(df -h "$CCODE_DIR" | tail -1 | awk '{print $5}' | sed 's/%//')
+disk_avail=$(df -h "$CCODE_DIR" | tail -1 | awk '{print $4}')
+if [ "$disk_usage" -lt 90 ]; then
+    check 0 "Disk usage: ${disk_usage}% (${disk_avail} available)"
+else
+    check 1 "Disk usage: ${disk_usage}% (${disk_avail} available) - Low space!" "warning"
+fi
+output ""
+
+# 3. GIT STATUS
+output "${BLUE}## Git Repositories${NC}"
+for repo in claude-auto-launcher llm-council weekly-ai-sigint workflow-automation vibe-coding-utilities; do
+    if [ -d "$CCODE_DIR/$repo/.git" ]; then
+        cd "$CCODE_DIR/$repo"
+        changes=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+        branch=$(git branch --show-current 2>/dev/null)
+        ahead=$(git rev-list --count @{u}..HEAD 2>/dev/null || echo "0")
+        last_commit=$(git log -1 --format="%ar" 2>/dev/null)
+
+        if [ "$changes" -eq 0 ] && [ "$ahead" -eq 0 ]; then
+            check 0 "$repo (${branch}) - clean, last commit: $last_commit"
+        elif [ "$changes" -gt 0 ] && [ "$ahead" -eq 0 ]; then
+            check 1 "$repo (${branch}) - ${changes} uncommitted changes" "warning"
+        elif [ "$ahead" -gt 0 ]; then
+            check 1 "$repo (${branch}) - ${ahead} unpushed commits" "warning"
+        else
+            check 1 "$repo (${branch}) - ${changes} uncommitted, ${ahead} unpushed" "warning"
+        fi
+    else
+        check 1 "$repo - not a git repository" "warning"
+    fi
+done
+output ""
+
+# 4. SERVICES
+output "${BLUE}## Services${NC}"
+declare -A service_names
+service_names[8001]="LLM Council Backend"
+service_names[5173]="LLM Council Frontend"
+service_names[3001]="Workflow Generator"
+service_names[3000]="Workflow Automation"
+
+for port in 8001 5173 3001 3000; do
+    if lsof -i :$port -sTCP:LISTEN > /dev/null 2>&1; then
+        pid=$(lsof -t -i :$port -sTCP:LISTEN)
+        uptime=$(ps -p $pid -o etime= 2>/dev/null | tr -d ' ')
+        check 0 "Port $port (${service_names[$port]}) - PID $pid, uptime: $uptime"
+    else
+        check 1 "Port $port (${service_names[$port]}) - not running"
+    fi
+done
+output ""
+
+# 5. LOG FILES
+output "${BLUE}## Log Files${NC}"
+log_dir="/tmp"
+for log in llm-council-backend llm-council-frontend workflow-automation workflow-generator; do
+    if [ -f "$log_dir/${log}.log" ]; then
+        size=$(du -h "$log_dir/${log}.log" | cut -f1)
+        errors_count=$(grep -ci "error\|exception\|failed" "$log_dir/${log}.log" 2>/dev/null | head -1)
+        if [ "$errors_count" -eq 0 ]; then
+            check 0 "${log}.log - ${size}, no errors"
+        else
+            check 1 "${log}.log - ${size}, ${errors_count} error lines" "warning"
+        fi
+    else
+        check 1 "${log}.log - not found" "warning"
+    fi
+done
+output ""
+
+# 6. DEPENDENCIES
+output "${BLUE}## Dependencies${NC}"
+command -v node > /dev/null 2>&1
+check $? "node $(node --version 2>/dev/null)"
+
+command -v npm > /dev/null 2>&1
+check $? "npm $(npm --version 2>/dev/null)"
+
+command -v pnpm > /dev/null 2>&1
+check $? "pnpm $(pnpm --version 2>/dev/null)"
+
+command -v python3 > /dev/null 2>&1
+check $? "python3 $(python3 --version 2>/dev/null | awk '{print $2}')"
+
+command -v uv > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    check 0 "uv $(uv --version 2>/dev/null | awk '{print $2}')"
+else
+    check 1 "uv - not installed" "warning"
+fi
+
+command -v lsof > /dev/null 2>&1
+check $? "lsof - available"
+
+command -v curl > /dev/null 2>&1
+check $? "curl - available"
+output ""
+
+# 7. DOCUMENTATION
+output "${BLUE}## Documentation${NC}"
+docs=("CLAUDE.md" "MASTER_README.md" "CLAUDE_CODE_UNIVERSAL_BEST_PRACTICES.md" "SECURITY_REPORT_2026-01-04.md")
+for doc in "${docs[@]}"; do
+    if [ -f "$CCODE_DIR/$doc" ]; then
+        size=$(du -h "$CCODE_DIR/$doc" | cut -f1)
+        lines=$(wc -l < "$CCODE_DIR/$doc" | tr -d ' ')
+        check 0 "$doc - ${lines} lines, ${size}"
+    else
+        check 1 "$doc - not found" "warning"
+    fi
+done
+output ""
+
+# 8. PROJECT STRUCTURES
+output "${BLUE}## Project Structures${NC}"
+projects=("workflow-automation" "llm-council" "weekly-ai-sigint" "claude-auto-launcher" "vibe-coding-utilities")
+for project in "${projects[@]}"; do
+    if [ -d "$CCODE_DIR/$project" ]; then
+        if [ -f "$CCODE_DIR/$project/CLAUDE.md" ]; then
+            check 0 "$project - has CLAUDE.md"
+        else
+            check 1 "$project - missing CLAUDE.md" "warning"
+        fi
+    else
+        check 1 "$project - directory not found"
+    fi
+done
+output ""
+
+# 9. SECURITY
+output "${BLUE}## Security${NC}"
+if [ -f "$CCODE_DIR/claude-auto-launcher/lib/helpers.sh" ]; then
+    check 0 "Security scanner available (helpers.sh)"
+else
+    check 1 "Security scanner not found"
+fi
+
+# Check for .gitignore patterns
+gitignore_count=$(find "$CCODE_DIR" -name ".gitignore" | wc -l | tr -d ' ')
+check 0 "Found ${gitignore_count} .gitignore files"
+
+# Check for .env files NOT in git
+env_in_git=$(cd "$CCODE_DIR" && git ls-files "**/.env" 2>/dev/null | wc -l | tr -d ' ')
+if [ "$env_in_git" -eq 0 ]; then
+    check 0 "No .env files committed to git"
+else
+    check 1 "WARNING: ${env_in_git} .env files in git!"
+fi
+output ""
+
+# SUMMARY
+output "${BLUE}╔══════════════════════════════════════════════════════════╗${NC}"
+output "${BLUE}║                    SUMMARY                               ║${NC}"
+output "${BLUE}╚══════════════════════════════════════════════════════════╝${NC}"
+output ""
+output "Total Checks:   ${BLUE}${total_checks}${NC}"
+output "Passed:         ${GREEN}${passed_checks}${NC}"
+output "Warnings:       ${YELLOW}${warnings}${NC}"
+output "Errors:         ${RED}${errors}${NC}"
+output ""
+
+# Overall status
+if [ $errors -eq 0 ] && [ $warnings -eq 0 ]; then
+    output "${GREEN}✓ OVERALL STATUS: EXCELLENT${NC}"
+    exit_code=0
+elif [ $errors -eq 0 ]; then
+    output "${YELLOW}⚠ OVERALL STATUS: GOOD (with warnings)${NC}"
+    exit_code=0
+else
+    output "${RED}✗ OVERALL STATUS: ISSUES DETECTED${NC}"
+    exit_code=1
+fi
+
+output ""
+if [ -n "$EXPORT_FILE" ]; then
+    output "Report exported to: ${EXPORT_FILE}"
+fi
+
+exit $exit_code

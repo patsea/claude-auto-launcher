@@ -1,0 +1,223 @@
+#!/bin/bash
+# claude-auto-nightly v3.0 - Nightly maintenance tasks
+# Run via launchd at 2 AM or manually
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$SCRIPT_DIR/lib/config.sh"
+
+LOG_FILE="/tmp/claude-auto-nightly-$(date +%Y-%m-%d).log"
+SUMMARY=""
+
+log() {
+    echo "[$(date '+%H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+add_summary() {
+    SUMMARY="${SUMMARY}• $1\n"
+}
+
+convert_remotes_to_ssh() {
+    log "=== Converting HTTPS remotes to SSH ==="
+    local converted=0
+
+    for repo in $CLAUDE_AUTO_REPOS; do
+        if [[ -d "$CLAUDE_AUTO_WORKDIR/$repo/.git" ]]; then
+            cd "$CLAUDE_AUTO_WORKDIR/$repo"
+            remote_url=$(git remote get-url origin 2>/dev/null || echo "")
+
+            if [[ "$remote_url" == https://github.com/* ]]; then
+                ssh_url=$(echo "$remote_url" | sed 's|https://github.com/|git@github.com:|')
+                git remote set-url origin "$ssh_url"
+                log "  ✅ $repo: converted to SSH"
+                ((converted++)) || true
+            fi
+        fi
+    done
+
+    [[ $converted -gt 0 ]] && add_summary "🔗 Converted $converted repos to SSH" || true
+}
+
+security_scan() {
+    log "=== Security Scan ==="
+    local issues=0
+
+    for repo in $CLAUDE_AUTO_REPOS; do
+        if [[ -d "$CLAUDE_AUTO_WORKDIR/$repo/.git" ]]; then
+            cd "$CLAUDE_AUTO_WORKDIR/$repo"
+
+            # Skip venv, node_modules, docs, examples
+            matches=$(git diff --cached --diff-filter=ACMR -U0 2>/dev/null | \
+                grep -iE "(api[_-]?key|password|secret|token|credential).*[=:]" | \
+                grep -v "example\|placeholder\|your.*here\|venv\|node_modules" | \
+                wc -l | tr -d ' ')
+
+            if [[ $matches -gt 0 ]]; then
+                log "  ⚠️  $repo: $matches potential secrets"
+                ((issues++)) || true
+            fi
+        fi
+    done
+
+    if [[ $issues -gt 0 ]]; then
+        add_summary "🔒 Security: $issues repos need review"
+    else
+        add_summary "🔒 Security: All repos clean"
+    fi || true
+}
+
+auto_commit() {
+    log "=== Auto-Commit ==="
+
+    if [[ "${CLAUDE_AUTO_COMMIT_ENABLED:-false}" != "true" ]]; then
+        log "  ⏭️  Auto-commit disabled"
+        return
+    fi
+
+    local committed=0
+    local skipped=0
+
+    for repo in $CLAUDE_AUTO_REPOS; do
+        if [[ -d "$CLAUDE_AUTO_WORKDIR/$repo/.git" ]]; then
+            cd "$CLAUDE_AUTO_WORKDIR/$repo"
+
+            changes=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+            [[ $changes -eq 0 ]] && continue
+
+            # Quick security check
+            secrets=$(git diff --diff-filter=ACMR -U0 2>/dev/null | \
+                grep -v "grep -.*E" | \
+                grep -iE "(api[_-]?key|password|secret|token).*=" | \
+                grep -v "example\|placeholder\|your.*here\|venv" | \
+                wc -l | tr -d ' ')
+
+            if [[ $secrets -gt 0 ]]; then
+                log "  ⚠️  $repo: Skipped - potential secrets"
+                ((skipped++)) || true
+                continue
+            fi
+
+            file_count=$(git status --porcelain | wc -l | tr -d ' ')
+            msg="${CLAUDE_AUTO_COMMIT_MESSAGE_PREFIX:-chore: auto-commit}: $file_count files $(date +%Y-%m-%d)"
+
+            git add -A
+            if git commit -m "$msg" >/dev/null 2>&1; then
+                if git push origin HEAD >/dev/null 2>&1; then
+                    log "  ✅ $repo: Committed $file_count files"
+                    ((committed++)) || true
+                else
+                    log "  ⚠️  $repo: Committed but push failed"
+                fi
+            else
+                log "  ⏭️  $repo: Nothing to commit after staging"
+            fi
+        fi
+    done
+
+    [[ $committed -gt 0 ]] || [[ $skipped -gt 0 ]] && add_summary "📦 Auto-commit: $committed done, $skipped skipped" || true
+}
+
+discover_repos() {
+    log "=== Repo Discovery ==="
+    local new_repos=""
+
+    [[ -z "${CLAUDE_AUTO_DISCOVERY_PATHS:-}" ]] && return
+
+    local known_repos=" $CLAUDE_AUTO_REPOS "
+
+    for scan_path in $CLAUDE_AUTO_DISCOVERY_PATHS; do
+        scan_path=$(eval echo "$scan_path")
+        [[ -d "$scan_path" ]] || continue
+
+        while IFS= read -r -d '' git_dir; do
+            repo_dir=$(dirname "$git_dir")
+            repo_name=$(basename "$repo_dir")
+
+            if [[ "$known_repos" != *" $repo_name "* ]]; then
+                new_repos="$new_repos $repo_name"
+                log "  🆕 Found: $repo_name"
+            fi
+        done < <(find "$scan_path" -maxdepth 2 -name ".git" -type d -print0 2>/dev/null)
+    done
+
+    [[ -n "$new_repos" ]] && add_summary "🔍 New repos:$new_repos" || true
+}
+
+cleanup_logs() {
+    log "=== Log Cleanup ==="
+    deleted=$(find /tmp -name "claude-auto-*.log" -mtime +7 -delete -print 2>/dev/null | wc -l | tr -d ' ')
+    [[ $deleted -gt 0 ]] && log "  🗑️  Deleted $deleted old logs" || true
+}
+
+send_slack_summary() {
+    [[ -z "${CLAUDE_AUTO_SLACK_WEBHOOK:-}" ]] && return
+
+    log "=== Sending Slack Summary ==="
+
+    # Escape for JSON
+    local escaped_summary=$(echo -e "$SUMMARY" | sed 's/"/\\"/g' | tr '\n' ' ')
+
+    local payload=$(cat <<EOF
+{
+    "blocks": [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": "🌙 Claude-Auto Nightly Report",
+                "emoji": true
+            }
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*$(date '+%A, %B %d, %Y')*\n\n$escaped_summary"
+            }
+        }
+    ]
+}
+EOF
+)
+
+    if curl -s -X POST -H 'Content-type: application/json' \
+        --data "$payload" \
+        "$CLAUDE_AUTO_SLACK_WEBHOOK" >/dev/null 2>&1; then
+        log "  ✅ Slack notification sent"
+    else
+        log "  ❌ Slack notification failed"
+    fi
+}
+
+main() {
+    echo "" > "$LOG_FILE"
+    log "╔══════════════════════════════════════════════════════════════╗"
+    log "║  claude-auto-nightly v3.0                                    ║"
+    log "╚══════════════════════════════════════════════════════════════╝"
+
+    load_config
+
+    convert_remotes_to_ssh
+    security_scan
+    auto_commit
+    discover_repos
+    cleanup_logs
+
+    # Cleanup old instruction files
+    if [[ -x "$SCRIPT_DIR/lib/cleanup-instruction-files.sh" ]]; then
+        "$SCRIPT_DIR/lib/cleanup-instruction-files.sh"
+        INSTRUCTION_CLEANUP=$(cat /tmp/instruction-cleanup-count.txt 2>/dev/null || echo "0")
+        [[ $INSTRUCTION_CLEANUP -gt 0 ]] && add_summary "🧹 Instruction files cleaned: $INSTRUCTION_CLEANUP" || true
+    fi
+
+    send_slack_summary
+
+    log ""
+    log "=== Complete ==="
+
+    echo ""
+    echo "Log: $LOG_FILE"
+}
+
+main "$@"

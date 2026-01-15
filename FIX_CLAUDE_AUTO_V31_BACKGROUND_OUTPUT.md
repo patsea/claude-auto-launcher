@@ -1,0 +1,142 @@
+# FIX: claude-auto v3.1 - Background Output Race Condition
+
+Before executing, read best practices from: ~/Dropbox/ALOMA/claude-code/CLAUDE_CODE_UNIVERSAL_BEST_PRACTICES.md
+
+**Execute from**: `~/Dropbox/ALOMA/claude-code/claude-auto-launcher/`
+
+## ⛔ RULES
+- Execute EVERY step in order
+- Do NOT create files not listed here
+- Do NOT improvise
+
+## STEP 1: Backup current version
+
+```bash
+cp bin/claude-auto bin/claude-auto.v3.0.backup && echo "✅ Backup created"
+```
+
+## STEP 2: Replace bin/claude-auto with fixed version
+
+```bash
+cat > bin/claude-auto << 'EOF'
+#!/bin/bash
+# claude-auto v3.1 - Config-driven Claude Code launcher
+# v3.1: Fix background output race condition (redirect to log file)
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$SCRIPT_DIR/lib/config.sh"
+source "$SCRIPT_DIR/lib/helpers.sh" 2>/dev/null || true
+
+STARTUP_LOG="/tmp/claude-auto-startup.log"
+
+print_banner() {
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║  claude-auto v3.1 - Config-Driven Claude Code Launcher       ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+}
+
+start_services_if_configured() {
+    if [[ ${#CLAUDE_AUTO_SERVICES[@]} -eq 0 ]]; then
+        return
+    fi
+    
+    echo "=== Service Status ===" >> "$STARTUP_LOG"
+    for service_def in "${CLAUDE_AUTO_SERVICES[@]}"; do
+        IFS=':' read -r name port start_cmd health_path <<< "$service_def"
+        
+        if lsof -i :"$port" >/dev/null 2>&1; then
+            echo "✅ $name (port $port) - running" >> "$STARTUP_LOG"
+        else
+            echo "🔄 Starting $name on port $port..." >> "$STARTUP_LOG"
+            (cd "$CLAUDE_AUTO_WORKDIR" && eval "$start_cmd" >> "$STARTUP_LOG" 2>&1 &)
+        fi
+    done
+}
+
+open_browser_tabs() {
+    if [[ ${#CLAUDE_AUTO_BROWSER_URLS[@]} -eq 0 ]]; then
+        return
+    fi
+    
+    for url in "${CLAUDE_AUTO_BROWSER_URLS[@]}"; do
+        open "$url" 2>/dev/null || true
+    done
+}
+
+quick_git_status() {
+    echo "=== Quick Git Status ===" >> "$STARTUP_LOG"
+    for repo in $CLAUDE_AUTO_REPOS; do
+        if [[ -d "$CLAUDE_AUTO_WORKDIR/$repo/.git" ]]; then
+            cd "$CLAUDE_AUTO_WORKDIR/$repo"
+            changes=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+            unpushed=$(git log --oneline @{u}..HEAD 2>/dev/null | wc -l | tr -d ' ')
+            if [[ "$changes" -gt 0 ]] || [[ "$unpushed" -gt 0 ]]; then
+                echo "⚠️  $repo: $changes uncommitted, $unpushed unpushed" >> "$STARTUP_LOG"
+            fi
+        fi
+    done
+    cd "$CLAUDE_AUTO_WORKDIR"
+}
+
+main() {
+    print_banner
+    load_config
+    
+    # Initialize log file
+    echo "=== claude-auto startup $(date) ===" > "$STARTUP_LOG"
+    
+    cd "$CLAUDE_AUTO_WORKDIR"
+    echo "📂 Working directory: $CLAUDE_AUTO_WORKDIR"
+    echo "📋 Status: tail -f $STARTUP_LOG"
+    echo ""
+    
+    # Background: Start services (output to log)
+    (
+        sleep 1
+        start_services_if_configured
+    ) &
+    
+    # Background: Quick git status (output to log)
+    (
+        sleep 2
+        quick_git_status
+    ) &
+    
+    # Background: Open browser tabs (no output needed)
+    (
+        sleep 5
+        open_browser_tabs
+    ) &
+    
+    # Start Claude Code
+    echo "🚀 Launching Claude Code..."
+    exec claude
+}
+
+main "$@"
+EOF
+chmod +x bin/claude-auto && echo "✅ bin/claude-auto updated to v3.1"
+```
+
+## STEP 3: Verify script syntax
+
+```bash
+bash -n bin/claude-auto && echo "✅ Syntax valid"
+```
+
+## STEP 4: Test launch (optional - manual)
+
+```bash
+echo "Test with: claude-auto"
+echo "Check background status with: cat /tmp/claude-auto-startup.log"
+```
+
+## VERIFICATION
+
+After running claude-auto:
+1. Claude Code TUI should render cleanly without garbled text
+2. Background status should appear in: `/tmp/claude-auto-startup.log`
