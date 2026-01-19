@@ -1,6 +1,6 @@
 #!/bin/bash
 # Claude Auto Audit - Enhanced system health check
-# Version: 2.0
+# Version: 2.1
 
 CCODE_DIR="${CCODE_DIR:-$HOME/Dropbox/ALOMA/claude-code}"
 EXPORT_FILE=""
@@ -304,3 +304,71 @@ if [ -n "$EXPORT_FILE" ]; then
 fi
 
 exit $exit_code
+
+# ============================================================
+# ENHANCED HEALTH CHECKS (v2.1)
+# ============================================================
+
+section "Backup Health"
+
+# Check ALOMA backup staleness
+BACKUP_LOG="$HOME/Dropbox/ALOMA/claude-code/aloma-backup.log"
+if [ -f "$BACKUP_LOG" ]; then
+    LAST_BACKUP=$(stat -f %m "$BACKUP_LOG" 2>/dev/null || stat -c %Y "$BACKUP_LOG" 2>/dev/null)
+    NOW=$(date +%s)
+    HOURS_AGO=$(( (NOW - LAST_BACKUP) / 3600 ))
+    if [ "$HOURS_AGO" -gt 24 ]; then
+        warn "ALOMA backup is ${HOURS_AGO}h old (>24h stale)"
+    else
+        ok "ALOMA backup: ${HOURS_AGO}h ago"
+    fi
+else
+    warn "ALOMA backup log not found"
+fi
+
+# Check model tasks output
+MODEL_LOG="$HOME/Dropbox/ALOMA/claude-code/aloma-backup/model-tasks-cron.log"
+if [ -f "$MODEL_LOG" ]; then
+    LAST_COUNT=$(grep "Total model tasks:" "$MODEL_LOG" 2>/dev/null | tail -1 | grep -oE '[0-9]+$')
+    if [ -n "$LAST_COUNT" ]; then
+        ok "Model tasks last run: $LAST_COUNT tasks"
+    else
+        warn "Model tasks: no count found in log"
+    fi
+fi
+
+section "Disk & Logs"
+
+# Disk space check
+FREE_GB=$(df -g "$HOME" 2>/dev/null | awk 'NR==2 {print $4}' || df -BG "$HOME" 2>/dev/null | awk 'NR==2 {print $4}' | tr -d 'G')
+if [ -n "$FREE_GB" ] && [ "$FREE_GB" -lt 10 ]; then
+    warn "Low disk space: ${FREE_GB}GB free (<10GB)"
+else
+    ok "Disk space: ${FREE_GB}GB free"
+fi
+
+# Large log files check
+LARGE_LOGS=$(find "$HOME/.claude-auto/logs" "$HOME/Dropbox/ALOMA/claude-code" -name "*.log" -size +10M 2>/dev/null | head -5)
+if [ -n "$LARGE_LOGS" ]; then
+    warn "Large log files (>10MB):"
+    echo "$LARGE_LOGS" | while read f; do echo "  - $(basename "$f"): $(du -h "$f" | cut -f1)"; done
+else
+    ok "No oversized log files"
+fi
+
+section "Weekly Research (SIGINT)"
+
+RESEARCH_LOG="$HOME/Dropbox/ALOMA/claude-code/workflow-automation/logs/research.log"
+if [ -f "$RESEARCH_LOG" ]; then
+    if grep -q "env: node: No such file" "$RESEARCH_LOG" 2>/dev/null; then
+        warn "Weekly research failing: node not in PATH"
+    else
+        LAST_SUCCESS=$(grep -E "Research complete|Successfully" "$RESEARCH_LOG" 2>/dev/null | tail -1)
+        if [ -n "$LAST_SUCCESS" ]; then
+            ok "Weekly research: operational"
+        else
+            warn "Weekly research: no recent success in log"
+        fi
+    fi
+fi
+

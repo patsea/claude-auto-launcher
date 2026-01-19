@@ -1,0 +1,17 @@
+#!/bin/bash
+# Claude Auto Cleanup - Cron wrapper
+# Cleans up instruction files older than 1 day
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOG_DIR="$HOME/.claude-auto/logs"
+LOG_FILE="$LOG_DIR/cleanup-$(date +%Y-%m-%d).log"
+
+mkdir -p "$LOG_DIR"
+
+echo "=== Instruction File Cleanup $(date) ===" >> "$LOG_FILE"
+
+# Run cleanup on claude-code directory
+"$SCRIPT_DIR/lib/cleanup-instruction-files.sh" "$HOME/Dropbox/ALOMA/claude-code" >> "$LOG_FILE" 2>&1
+
+echo "=== Cleanup Complete ===" >> "$LOG_FILE"
+echo "" >> "$LOG_FILE"

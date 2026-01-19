@@ -1,0 +1,33 @@
+#!/bin/bash
+# claude-auto-launch - Open browser tabs after verifying services are healthy
+# Usage: claude-auto launch
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$SCRIPT_DIR/lib/helpers.sh"
+source "$SCRIPT_DIR/lib/config.sh" 2>/dev/null || true
+
+# Load project config if exists
+load_project_config 2>/dev/null || true
+
+echo "🌐 Claude Auto Launch"
+echo ""
+
+# Wait for all services to be healthy (30s timeout)
+if wait_for_all_services 30; then
+    echo ""
+    echo "Opening browser tabs..."
+    launch_browser_tabs
+    echo "✓ Browser tabs opened"
+else
+    echo ""
+    echo "⚠️  Some services not healthy. Open anyway? (y/N)"
+    read -r response
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        launch_browser_tabs
+        echo "✓ Browser tabs opened (with warnings)"
+    else
+        echo "Aborted. Start services with: claude-auto"
+    fi
+fi
+
+display_timestamp "claude-auto launch"

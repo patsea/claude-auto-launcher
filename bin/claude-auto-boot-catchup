@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+#
+# claude-auto-boot-catchup
+# Runs missed cron jobs after system boot
+#
+# Version: 1.0
+# Created: 2026-01-18
+
+set -euo pipefail
+
+LOG_FILE="$HOME/.claude-auto/logs/boot-catchup.log"
+LAST_RUN_FILE="$HOME/.claude-auto/.last-boot-catchup"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
+}
+
+# Ensure log directory exists
+mkdir -p "$HOME/.claude-auto/logs"
+
+log "=========================================="
+log "Boot Catch-Up Started"
+log "=========================================="
+
+# Get system boot time
+BOOT_TIME=$(sysctl -n kern.boottime | awk '{print $4}' | sed 's/,//')
+BOOT_DATE=$(date -r "$BOOT_TIME" '+%Y-%m-%d %H:%M:%S')
+log "System booted at: $BOOT_DATE"
+
+# Check if we've already run since this boot
+if [ -f "$LAST_RUN_FILE" ]; then
+    LAST_RUN=$(cat "$LAST_RUN_FILE")
+    if [ "$LAST_RUN" -ge "$BOOT_TIME" ]; then
+        log "Already ran since boot. Exiting."
+        exit 0
+    fi
+fi
+
+# Check if any cron jobs were missed (boot was during cron hours)
+BOOT_HOUR=$(date -r "$BOOT_TIME" '+%H')
+BOOT_DAY=$(date -r "$BOOT_TIME" '+%u')  # 1=Monday, 7=Sunday
+
+MISSED_JOBS=()
+
+# Check 2:00 AM jobs (backup, cleanup)
+if [ "$BOOT_HOUR" -le 2 ]; then
+    MISSED_JOBS+=("backup" "cleanup")
+fi
+
+# Check 2:30 AM job (README updates)
+if [ "$BOOT_HOUR" -le 2 ] || ([ "$BOOT_HOUR" -eq 2 ] && [ "$(date -r "$BOOT_TIME" '+%M')" -lt 30 ]); then
+    MISSED_JOBS+=("readme")
+fi
+
+# Check 3:00 AM job (model tasks)
+if [ "$BOOT_HOUR" -le 3 ]; then
+    MISSED_JOBS+=("model-tasks")
+fi
+
+# Check 8:00 AM job (audit)
+if [ "$BOOT_HOUR" -le 8 ]; then
+    MISSED_JOBS+=("audit")
+fi
+
+# Check 9:00 AM Monday job (weekly research)
+if [ "$BOOT_DAY" -eq 1 ] && [ "$BOOT_HOUR" -le 9 ]; then
+    MISSED_JOBS+=("weekly-research")
+fi
+
+# Exit if no missed jobs
+if [ ${#MISSED_JOBS[@]} -eq 0 ]; then
+    log "No missed cron jobs. All scheduled tasks will run normally."
+    echo "$BOOT_TIME" > "$LAST_RUN_FILE"
+    exit 0
+fi
+
+log "Detected ${#MISSED_JOBS[@]} missed job(s): ${MISSED_JOBS[*]}"
+log "Running catch-up tasks..."
+
+# Run missed jobs
+for job in "${MISSED_JOBS[@]}"; do
+    case "$job" in
+        backup)
+            log "Running: ALOMA backup"
+            /Users/pwilliamson/Dropbox/ALOMA/claude-code/aloma-backup.sh >> /Users/pwilliamson/Dropbox/ALOMA/claude-code/aloma-backup.log 2>&1 &
+            ;;
+        cleanup)
+            log "Running: Instruction file cleanup"
+            "$HOME/.claude-auto/bin/claude-auto-cleanup" >> "$LOG_FILE" 2>&1
+            ;;
+        readme)
+            log "Running: README updates"
+            "$HOME/.claude-auto/bin/claude-auto-readme" >> "$LOG_FILE" 2>&1
+            ;;
+        model-tasks)
+            log "Running: Model task generation"
+            /opt/homebrew/bin/bash /Users/pwilliamson/Dropbox/ALOMA/claude-code/aloma-model-tasks.sh >> /Users/pwilliamson/Dropbox/ALOMA/claude-code/aloma-backup/model-tasks-cron.log 2>&1
+            ;;
+        audit)
+            log "Running: System audit"
+            "$HOME/.claude-auto/bin/claude-auto-audit" --no-color > "$HOME/.claude-auto/logs/audit-$(date +%Y-%m-%d).log" 2>&1
+            ;;
+        weekly-research)
+            log "Running: Weekly AI research (Monday only)"
+            cd /Users/pwilliamson/Dropbox/ALOMA/claude-code/workflow-automation && npx tsx scripts/weekly-research.ts >> /Users/pwilliamson/Dropbox/ALOMA/claude-code/workflow-automation/logs/research.log 2>&1 &
+            ;;
+    esac
+done
+
+# Record this run
+echo "$BOOT_TIME" > "$LAST_RUN_FILE"
+
+log "=========================================="
+log "Boot Catch-Up Complete"
+log "Note: Backup may still be running in background"
+log "=========================================="
+
+exit 0

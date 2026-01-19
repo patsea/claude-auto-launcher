@@ -1,7 +1,7 @@
 #!/bin/bash
 # Helper functions for Claude Auto Launcher
-# Version: 2.5
-# Last Updated: January 2, 2026
+# Version: 2.7
+# Last Updated: January 17, 2026
 
 # Check if a service is healthy on a specific port
 check_service_health() {
@@ -212,6 +212,9 @@ check_gitignore_patterns() {
         ".secret*"
         "credentials.json"
         "secrets/"
+        "*PHASE*.md"
+        "*FIX*.md"
+        "*INSTRUCTION*.md"
     )
 
     if [ ! -f "$gitignore" ]; then
@@ -239,6 +242,46 @@ check_gitignore_patterns() {
     fi
 }
 
+# Check for instruction files staged in git
+# These should never be committed to public repos
+check_instruction_files_staged() {
+    local dir="${1:-.}"
+    local issues_found=0
+
+    # Only check if this is a git repo
+    if [ ! -d "$dir/.git" ] && ! git rev-parse --git-dir > /dev/null 2>&1; then
+        return 0
+    fi
+
+    local original_dir=$(pwd)
+    cd "$dir" 2>/dev/null || return 0
+
+    echo "  Checking for instruction files in staging..."
+
+    # Patterns that indicate instruction/planning files
+    local staged_instructions=$(git diff --cached --name-only 2>/dev/null | \
+        grep -iE "(phase|instruction|fix|update|recon|plan|briefing|test_script)" | \
+        grep -iE "\.md$" | \
+        grep -viE "^(readme|changelog|contributing|claude)\.md$")
+
+    if [ -n "$staged_instructions" ]; then
+        echo "  ⚠️  INSTRUCTION FILES STAGED FOR COMMIT:"
+        echo ""
+        echo "$staged_instructions" | while read -r f; do
+            echo "      - $f"
+        done
+        echo ""
+        echo "  These files may contain sensitive paths or company references."
+        echo "  Run: git reset HEAD -- '*PHASE*.md' '*FIX*.md' to unstage"
+        issues_found=1
+    else
+        echo "  ✓ No instruction files staged"
+    fi
+
+    cd "$original_dir" 2>/dev/null || true
+    return $issues_found
+}
+
 # Run all pre-flight checks before starting services
 preflight_checks() {
     local dir=${1:-.}
@@ -259,6 +302,11 @@ preflight_checks() {
 
     # Check for ALOMA references in public repos
     if ! check_patsea_aloma_references "$dir"; then
+        failed=1
+    fi
+
+    # Check for instruction files in staging
+    if ! check_instruction_files_staged "$dir"; then
         failed=1
     fi
 
@@ -427,4 +475,76 @@ check_patsea_aloma_references() {
     fi
 
     return $issues_found
+}
+
+# Wait for ALL configured services to be healthy before proceeding
+# Usage: wait_for_all_services [timeout_seconds]
+# Returns: 0 if all healthy, 1 if timeout
+wait_for_all_services() {
+    local timeout="${1:-30}"
+    local start_time=$(date +%s)
+    
+    # Get configured ports
+    local ports_to_check=""
+    [ -n "$SERVICE_PORT_1" ] && ports_to_check="$SERVICE_PORT_1"
+    [ -n "$SERVICE_PORT_2" ] && ports_to_check="$ports_to_check $SERVICE_PORT_2"
+    [ -n "$SERVICE_PORT_3" ] && ports_to_check="$ports_to_check $SERVICE_PORT_3"
+    
+    # If no ports configured, return immediately
+    [ -z "$(echo $ports_to_check | tr -d ' ')" ] && return 0
+    
+    local port_count=$(echo $ports_to_check | wc -w | tr -d ' ')
+    echo -n "Waiting for $port_count service(s) to be healthy"
+    
+    while [ $(($(date +%s) - start_time)) -lt "$timeout" ]; do
+        local healthy_count=0
+        
+        for port in $ports_to_check; do
+            # Check port is listening
+            if ! lsof -i ":$port" -sTCP:LISTEN >/dev/null 2>&1; then
+                continue
+            fi
+            
+            # Check HTTP response (accept 2xx, 3xx)
+            local http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 "http://localhost:$port" 2>/dev/null)
+            if [[ "$http_code" =~ ^[23] ]]; then
+                ((healthy_count++))
+                continue
+            fi
+            
+            # Try HTTPS
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 -k "https://localhost:$port" 2>/dev/null)
+            if [[ "$http_code" =~ ^[23] ]]; then
+                ((healthy_count++))
+            fi
+        done
+        
+        if [ "$healthy_count" -eq "$port_count" ]; then
+            echo " ✓ all healthy"
+            return 0
+        fi
+        
+        echo -n "."
+        sleep 1
+    done
+    
+    echo " (timeout: $healthy_count/$port_count healthy after ${timeout}s)"
+    return 1
+}
+
+# Open browser tabs for configured URLs
+# Usage: launch_browser_tabs
+launch_browser_tabs() {
+    [ -n "$BROWSER_URL_1" ] && open "$BROWSER_URL_1" 2>/dev/null
+    [ -n "$BROWSER_URL_2" ] && open "$BROWSER_URL_2" 2>/dev/null
+    [ -n "$BROWSER_URL_3" ] && open "$BROWSER_URL_3" 2>/dev/null
+    return 0
+}
+
+# Display completion timestamp
+# Usage: display_timestamp [command_name]
+display_timestamp() {
+    local cmd_name="${1:-Command}"
+    echo ""
+    echo "✓ $cmd_name completed at $(date '+%Y-%m-%d %H:%M:%S')"
 }

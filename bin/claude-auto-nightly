@@ -101,7 +101,23 @@ auto_commit() {
             file_count=$(git status --porcelain | wc -l | tr -d ' ')
             msg="${CLAUDE_AUTO_COMMIT_MESSAGE_PREFIX:-chore: auto-commit}: $file_count files $(date +%Y-%m-%d)"
 
+            # Add all files respecting .gitignore
             git add -A
+
+            # Remove instruction files from staging (even if accidentally added)
+            git reset HEAD -- '*PHASE*.md' '*phase*.md' '*INSTRUCTION*.md' '*instruction*.md' \
+                '*FIX*.md' '*fix*.md' '*UPDATE*.md' '*update*.md' '*RECON*.md' '*recon*.md' \
+                '*PLAN*.md' '*plan*.md' '*BRIEFING*.md' '*briefing*.md' '*TEST_SCRIPT*.md' \
+                '*test_script*.md' 'ALOMA*.md' 2>/dev/null || true
+
+            # Verify no ALOMA references in staged files
+            if git diff --cached | grep -qi "aloma"; then
+                log "  ⚠️  $repo: Skipped - ALOMA reference detected in changes"
+                git reset HEAD >/dev/null 2>&1
+                ((skipped++)) || true
+                continue
+            fi
+
             if git commit -m "$msg" >/dev/null 2>&1; then
                 if git push origin HEAD >/dev/null 2>&1; then
                     log "  ✅ $repo: Committed $file_count files"

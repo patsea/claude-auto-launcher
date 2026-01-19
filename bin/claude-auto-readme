@@ -1,0 +1,17 @@
+#!/bin/bash
+# Claude Auto README Updater - Cron wrapper
+# Updates README.md files with daily changes
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOG_DIR="$HOME/.claude-auto/logs"
+LOG_FILE="$LOG_DIR/readme-$(date +%Y-%m-%d).log"
+
+mkdir -p "$LOG_DIR"
+
+echo "=== README Auto-Update $(date) ===" >> "$LOG_FILE"
+
+# Run updater
+"$SCRIPT_DIR/lib/update-readme-auto.sh" "$HOME/Dropbox/ALOMA/claude-code" >> "$LOG_FILE" 2>&1
+
+echo "=== Update Complete ===" >> "$LOG_FILE"
+echo "" >> "$LOG_FILE"

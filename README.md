@@ -1,5 +1,26 @@
 # claude-auto v3.0
 
+<!-- AUTO-GENERATED: Recent Changes -->
+### Recent Activity
+
+**Last Updated**: 2026-01-18
+**Commits This Week**: 3
+
+**Recent Changes** (12 files):
+- `.gitignore`
+- `FIX_CLAUDE_AUTO_V31_BACKGROUND_OUTPUT.md`
+- `FIX_CLAUDE_AUTO_V32_ALLOWED_TOOLS.md`
+- `FIX_CLAUDE_AUTO_V33_SETTINGS_JSON.md`
+- `FIX_CLAUDE_AUTO_V34_PERMISSION_FORMAT.md`
+- `README.md`
+- `bin/claude-auto-audit`
+- `bin/claude-auto-nightly`
+- `commit-claude-auto-launcher.md`
+- `fix-autocommit-scanner-false-positive.md`
+- ... and 2 more
+<!-- END AUTO-GENERATED -->
+
+
 **Config-driven launcher for Claude Code with automated git management, service orchestration, and nightly maintenance.**
 
 Version: 3.0
