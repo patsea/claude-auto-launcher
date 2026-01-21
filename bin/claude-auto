@@ -10,7 +10,7 @@ source "$SCRIPT_DIR/lib/helpers.sh" 2>/dev/null || true
 
 
 # Handle 'launch' subcommand
-if [ "$1" = "launch" ]; then
+if [ "${1:-}" = "launch" ]; then
     exec "$SCRIPT_DIR/bin/claude-auto-launch"
 fi
 STARTUP_LOG="/tmp/claude-auto-startup.log"
@@ -48,6 +48,7 @@ EOF
 }
 
 start_services_if_configured() {
+    [[ -z "${CLAUDE_AUTO_SERVICES+x}" ]] && return  # Variable not set
     [[ ${#CLAUDE_AUTO_SERVICES[@]} -eq 0 ]] && return
     echo "=== Service Status ===" >> "$STARTUP_LOG"
     for service_def in "${CLAUDE_AUTO_SERVICES[@]}"; do
@@ -61,11 +62,14 @@ start_services_if_configured() {
     done
 }
 
+open_browser_tabs() {
+    [[ -z "${CLAUDE_AUTO_BROWSER_URLS+x}" ]] && return  # Variable not set
     [[ ${#CLAUDE_AUTO_BROWSER_URLS[@]} -eq 0 ]] && return
     for url in "${CLAUDE_AUTO_BROWSER_URLS[@]}"; do open "$url" 2>/dev/null || true; done
 }
 
 quick_git_status() {
+    [[ -z "${CLAUDE_AUTO_REPOS:-}" ]] && return  # Variable not set
     echo "=== Quick Git Status ===" >> "$STARTUP_LOG"
     for repo in $CLAUDE_AUTO_REPOS; do
         [[ -d "$CLAUDE_AUTO_WORKDIR/$repo/.git" ]] || continue
