@@ -3,14 +3,16 @@
 <!-- AUTO-GENERATED: Recent Changes -->
 ### Recent Activity
 
-**Last Updated**: 2026-01-20
-**Commits This Week**: 5
+**Last Updated**: 2026-01-21
+**Commits This Week**: 6
 
 **Today's Commits** (1):
-- `c5debb2` chore: auto-commit: 1 files 2026-01-20
+- `a2f79ff` chore: auto-commit: 2 files 2026-01-21
 
-**Recent Changes** (1 files):
+**Recent Changes** (3 files):
 - `README.md`
+- `bin/claude-auto`
+- `bin/claude-auto-nightly.bak`
 <!-- END AUTO-GENERATED -->
 
 
