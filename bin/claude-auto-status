@@ -20,7 +20,7 @@ degraded=0
 stopped=0
 
 # Check each service
-for port in 8001 5173 3001 3000; do
+for port in 8001 5173 3000; do
     status=$(check_service_status "$port")
     format_status_line "$port" "$status"
 
