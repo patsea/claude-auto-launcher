@@ -1,6 +1,8 @@
 #!/bin/bash
-# cleanup-instruction-files.sh v2.2 - Comprehensive instruction file cleanup
-# Changes from v1.0 to v2.2: Filename patterns, backup cleanup, recursive scan
+# cleanup-instruction-files.sh v2.3 - Comprehensive instruction file cleanup
+# v2.3 (Jan 28, 2026): Clarified docs/ directory exclusion with explicit comment
+# v2.2: Filename patterns, backup cleanup, recursive scan
+# v1.0: Initial version
 
 CLAUDE_CODE_DIR="${1:-$HOME/Dropbox/ALOMA/claude-code}"
 TRASH_DIR="$CLAUDE_CODE_DIR/.instruction-trash"
@@ -20,7 +22,10 @@ while IFS= read -r -d '' file; do
     # Skip protected files
     [[ "$name" =~ ^(README|CHANGELOG|CLAUDE|MASTER_README)\.md$ ]] && continue
     [[ "$name" == *BEST_PRACTICES* || "$name" == *_PROJECT.md ]] && continue
+
+    # Skip docs/ directories (research, findings, reports, learnings - backed up to private aloma-io git)
     [[ "$dir" == */docs/* || "$dir" == *documentation* || "$dir" == *gitbook* ]] && continue
+
     [[ "$dir" == */instruction-archive/* || "$dir" == */.instruction-trash/* ]] && continue
     
     is_instruction=0
