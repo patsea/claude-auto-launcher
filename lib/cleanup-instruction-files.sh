@@ -1,80 +1,64 @@
 #!/bin/bash
-# cleanup-instruction-files.sh v2.3 - Comprehensive instruction file cleanup
+# cleanup-instruction-files.sh v3.0 - Instruction file cleanup
+# v3.0 (Jan 30, 2026): Only scan instructions/ directory, use _archive/instructions/
 # v2.3 (Jan 28, 2026): Clarified docs/ directory exclusion with explicit comment
 # v2.2: Filename patterns, backup cleanup, recursive scan
-# v1.0: Initial version
 
 CLAUDE_CODE_DIR="${1:-$HOME/Dropbox/ALOMA/claude-code}"
-TRASH_DIR="$CLAUDE_CODE_DIR/.instruction-trash"
+INSTRUCTIONS_DIR="$CLAUDE_CODE_DIR/instructions"
+ARCHIVE_DIR="$CLAUDE_CODE_DIR/_archive/instructions"
 LOG="/tmp/instruction-cleanup-$(date +%Y-%m-%d).log"
 
-mkdir -p "$TRASH_DIR"
-echo "[$(date '+%H:%M:%S')] Cleanup v2.0 starting - scanning $CLAUDE_CODE_DIR" >> "$LOG"
+mkdir -p "$ARCHIVE_DIR"
+echo "[$(date '+%H:%M:%S')] Cleanup v3.0 starting - scanning $INSTRUCTIONS_DIR" >> "$LOG"
 
-MOVED=0
-DELETED_BAK=0
+ARCHIVED=0
+DELETED_OLD=0
 
-# --- INSTRUCTION FILE CLEANUP (archive to trash) ---
-while IFS= read -r -d '' file; do
-    name=$(basename "$file")
-    dir=$(dirname "$file")
-    
-    # Skip protected files
-    [[ "$name" =~ ^(README|CHANGELOG|CLAUDE|MASTER_README)\.md$ ]] && continue
-    [[ "$name" == *BEST_PRACTICES* || "$name" == *_PROJECT.md ]] && continue
+# --- INSTRUCTION FILE CLEANUP (archive files older than 30 days) ---
+# Only scan the instructions/ directory
+if [[ -d "$INSTRUCTIONS_DIR" ]]; then
+    while IFS= read -r -d '' file; do
+        name=$(basename "$file")
 
-    # Skip docs/ directories (research, findings, reports, learnings - backed up to private aloma-io git)
-    [[ "$dir" == */docs/* || "$dir" == *documentation* || "$dir" == *gitbook* ]] && continue
-
-    [[ "$dir" == */instruction-archive/* || "$dir" == */.instruction-trash/* ]] && continue
-    
-    is_instruction=0
-    
-    # HIGH CONFIDENCE: Filename patterns
-    if [[ "$name" =~ ^(FIX|UPGRADE|TEST|ADD|PITFALL)-.*\.md$ ]]; then
-        is_instruction=1
-    elif [[ "$name" =~ ^UPDATE-BEST-PRACTICES.*\.md$ ]]; then
-        is_instruction=1
-    elif [[ "$name" =~ ^UPDATE_BEST_PRACTICES.*\.md$ ]]; then
-        is_instruction=1
-    elif [[ "$name" == *INSTRUCTION*.md || "$name" == *PHASE*.md ]]; then
-        is_instruction=1
-    fi
-    
-    # MEDIUM CONFIDENCE: Content markers (only if filename didn't match)
-    if [[ $is_instruction -eq 0 ]]; then
-        if grep -qE '(\*\*Execute from\*\*:|## ⛔ RULES|## STEP [0-9]+:|### STEP [0-9]+:|Do NOT create files not listed)' "$file" 2>/dev/null; then
-            is_instruction=1
+        # Archive to _archive/instructions/ with date prefix if not already prefixed
+        if [[ "$name" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+            # Already has date prefix, keep it
+            mv "$file" "$ARCHIVE_DIR/$name" 2>/dev/null && ((ARCHIVED++))
+        else
+            # Add date prefix
+            mv "$file" "$ARCHIVE_DIR/$(date +%Y%m%d)-$name" 2>/dev/null && ((ARCHIVED++))
         fi
-    fi
-    
-    if [[ $is_instruction -eq 1 ]]; then
-        mv "$file" "$TRASH_DIR/$(date +%Y%m%d)-$name" 2>/dev/null && ((MOVED++))
-        echo "  [INSTRUCTION] $file" >> "$LOG"
-    fi
-done < <(find "$CLAUDE_CODE_DIR" -name "*.md" -type f -mtime +1 \
-    ! -path "*/.git/*" ! -path "*/node_modules/*" ! -path "*/.next/*" \
-    ! -path "*/dist/*" ! -path "*/build/*" ! -path "*/.instruction-trash/*" \
-    ! -path "*/instruction-archive/*" -print0 2>/dev/null)
+        echo "  [ARCHIVED] $file" >> "$LOG"
+    done < <(find "$INSTRUCTIONS_DIR" -name "*.md" -type f -mtime +30 -print0 2>/dev/null)
+fi
 
-# --- BACKUP FILE CLEANUP (delete directly) ---
+echo "[$(date '+%H:%M:%S')] Archived: $ARCHIVED instruction file(s) older than 30 days" >> "$LOG"
+
+# --- PURGE OLD ARCHIVED INSTRUCTIONS (older than 90 days) ---
+PURGED=$(find "$ARCHIVE_DIR" -type f -mtime +90 -delete -print 2>/dev/null | wc -l | tr -d ' ')
+[[ $PURGED -gt 0 ]] && echo "[$(date '+%H:%M:%S')] Purged: $PURGED file(s) older than 90 days from archive" >> "$LOG"
+
+# --- BACKUP FILE CLEANUP (delete .bak files older than 7 days) ---
+DELETED_BAK=0
 while IFS= read -r -d '' file; do
-    name=$(basename "$file")
-    # Only delete backup files older than 7 days
     rm "$file" 2>/dev/null && ((DELETED_BAK++))
     echo "  [BACKUP] Deleted: $file" >> "$LOG"
 done < <(find "$CLAUDE_CODE_DIR" -type f -mtime +7 \( \
-    -name "*.bak" -o -name "*.bak2" -o -name "*.step*" -o \
-    -name "*.v[0-9]*.bak" -o -name "*.old" \
-    \) ! -path "*/.git/*" ! -path "*/node_modules/*" -print0 2>/dev/null)
+    -name "*.bak" -o -name "*.bak2" -o -name "*.bak3" -o -name "*.bak4" -o \
+    -name "*.step*" -o -name "*.v[0-9]*.bak" -o -name "*.old" -o \
+    -name "*.backup-*" \
+    \) ! -path "*/.git/*" ! -path "*/node_modules/*" ! -path "*/_archive/*" -print0 2>/dev/null)
 
-echo "[$(date '+%H:%M:%S')] Trashed: $MOVED instruction file(s), Deleted: $DELETED_BAK backup file(s)" >> "$LOG"
+[[ $DELETED_BAK -gt 0 ]] && echo "[$(date '+%H:%M:%S')] Deleted: $DELETED_BAK backup file(s)" >> "$LOG"
 
-# Purge instruction trash older than 7 days
-PURGED=$(find "$TRASH_DIR" -type f -mtime +7 -delete -print 2>/dev/null | wc -l | tr -d ' ')
-[[ $PURGED -gt 0 ]] && echo "[$(date '+%H:%M:%S')] Purged: $PURGED file(s) from trash" >> "$LOG"
+# --- EMPTY MONTH DIRECTORIES CLEANUP ---
+# Remove empty month directories from instructions/
+find "$INSTRUCTIONS_DIR" -mindepth 1 -maxdepth 1 -type d -empty -delete 2>/dev/null
 
-echo "$MOVED" > /tmp/instruction-cleanup-count.txt
+# Output count for nightly report
+echo "$ARCHIVED" > /tmp/instruction-cleanup-count.txt
+
 # --- LOG ROTATION (compress >7d, delete >30d) ---
 echo "[$(date '+%H:%M:%S')] Log rotation starting" >> "$LOG"
 
@@ -82,9 +66,10 @@ echo "[$(date '+%H:%M:%S')] Log rotation starting" >> "$LOG"
 COMPRESSED=0
 while IFS= read -r -d '' logfile; do
     gzip -9 "$logfile" 2>/dev/null && ((COMPRESSED++))
-done < <(find "$HOME/.claude-auto/logs" "$HOME/Dropbox/ALOMA/claude-code" -name "*.log" -type f -mtime +7 ! -name "*.gz" -print0 2>/dev/null)
+done < <(find "$HOME/.claude-auto/logs" "$CLAUDE_CODE_DIR/infra" -name "*.log" -type f -mtime +7 ! -name "*.gz" -print0 2>/dev/null)
 
 # Delete compressed logs older than 30 days
-DELETED_LOGS=$(find "$HOME/.claude-auto/logs" "$HOME/Dropbox/ALOMA/claude-code" -name "*.log.gz" -type f -mtime +30 -delete -print 2>/dev/null | wc -l | tr -d ' ')
+DELETED_LOGS=$(find "$HOME/.claude-auto/logs" "$CLAUDE_CODE_DIR/infra" -name "*.log.gz" -type f -mtime +30 -delete -print 2>/dev/null | wc -l | tr -d ' ')
 
 echo "[$(date '+%H:%M:%S')] Logs: $COMPRESSED compressed, $DELETED_LOGS deleted" >> "$LOG"
+echo "[$(date '+%H:%M:%S')] Cleanup complete" >> "$LOG"

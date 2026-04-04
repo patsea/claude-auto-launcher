@@ -508,14 +508,13 @@ start_services_if_configured() {
 # Converts CLAUDE_AUTO_SERVICES array to SERVICE_PORT_1, SERVICE_PORT_2, etc.
 # Converts CLAUDE_AUTO_BROWSER_URLS array to BROWSER_URL_1, BROWSER_URL_2, etc.
 load_project_config() {
-    # Extract ports and health paths from CLAUDE_AUTO_SERVICES array
+    # Extract ports from CLAUDE_AUTO_SERVICES array
     if [ -n "${CLAUDE_AUTO_SERVICES+x}" ] && [ ${#CLAUDE_AUTO_SERVICES[@]} -gt 0 ]; then
         local i=1
         for service_def in "${CLAUDE_AUTO_SERVICES[@]}"; do
             # Parse service definition: "name:port:start_cmd:health_path"
             IFS=':' read -r name port start_cmd health_path <<< "$service_def"
             eval "export SERVICE_PORT_$i=$port"
-            eval "export SERVICE_HEALTH_PATH_$i=\"${health_path:-/}\""
             ((i++))
         done
     fi
@@ -537,15 +536,13 @@ wait_for_all_services() {
     local timeout="${1:-30}"
     local start_time=$(date +%s)
 
-    # Get configured ports and health paths (support unlimited services)
-    local services_to_check=""
+    # Get configured ports (support unlimited services, not just 3)
+    local ports_to_check=""
     local i=1
     while true; do
         local port_var="SERVICE_PORT_$i"
-        local health_var="SERVICE_HEALTH_PATH_$i"
         if [ -n "${!port_var}" ]; then
-            local hp="${!health_var:-/}"
-            services_to_check="$services_to_check ${!port_var}|${hp}"
+            ports_to_check="$ports_to_check ${!port_var}"
             ((i++))
         else
             break
@@ -553,47 +550,44 @@ wait_for_all_services() {
     done
 
     # If no ports configured, return immediately
-    [ -z "$(echo $services_to_check | tr -d ' ')" ] && return 0
-
-    local service_count=$(echo $services_to_check | wc -w | tr -d ' ')
-    echo -n "Waiting for $service_count service(s) to be healthy"
-
+    [ -z "$(echo $ports_to_check | tr -d ' ')" ] && return 0
+    
+    local port_count=$(echo $ports_to_check | wc -w | tr -d ' ')
+    echo -n "Waiting for $port_count service(s) to be healthy"
+    
     while [ $(($(date +%s) - start_time)) -lt "$timeout" ]; do
         local healthy_count=0
-
-        for service_entry in $services_to_check; do
-            local port="${service_entry%%|*}"
-            local health_path="${service_entry#*|}"
-
+        
+        for port in $ports_to_check; do
             # Check port is listening
             if ! lsof -i ":$port" -sTCP:LISTEN >/dev/null 2>&1; then
                 continue
             fi
-
-            # Check HTTP response (accept 2xx, 3xx) using health_path
-            local http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 "http://localhost:${port}${health_path}" 2>/dev/null)
+            
+            # Check HTTP response (accept 2xx, 3xx)
+            local http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 "http://localhost:$port" 2>/dev/null)
             if [[ "$http_code" =~ ^[23] ]]; then
                 ((healthy_count++))
                 continue
             fi
-
-            # Try HTTPS with health_path
-            http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 -k "https://localhost:${port}${health_path}" 2>/dev/null)
+            
+            # Try HTTPS
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 -k "https://localhost:$port" 2>/dev/null)
             if [[ "$http_code" =~ ^[23] ]]; then
                 ((healthy_count++))
             fi
         done
-
-        if [ "$healthy_count" -eq "$service_count" ]; then
+        
+        if [ "$healthy_count" -eq "$port_count" ]; then
             echo " ✓ all healthy"
             return 0
         fi
-
+        
         echo -n "."
         sleep 1
     done
-
-    echo " (timeout: $healthy_count/$service_count healthy after ${timeout}s)"
+    
+    echo " (timeout: $healthy_count/$port_count healthy after ${timeout}s)"
     return 1
 }
 

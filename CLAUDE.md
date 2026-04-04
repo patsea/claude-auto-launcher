@@ -8,9 +8,40 @@ Edit SOURCE files in THIS directory, then run `./install.sh`
 | lib/helpers.sh | ~/.claude-auto/lib/helpers.sh |
 | lib/status-helpers.sh | ~/.claude-auto/lib/status-helpers.sh |
 
-## Version: 3.4
+## Version: 3.8
 
 ### Changelog
+
+**v3.8** (February 16, 2026)
+- Fixed: claude-auto-nightly now reports heartbeats (resolved stale job alerts)
+- Fixed: claude-auto-readme now reports heartbeats (resolved stale job alerts)
+- Added: Heartbeat reporting to all launchd-managed jobs
+- Changed: Both scripts now track execution time and report status to monitoring
+- Reason: K8s local-cron-checker was alerting on stale heartbeats (36h old)
+
+**v3.7** (February 16, 2026)
+- Fixed: claude-auto launch now starts services (not just waits for them)
+- Added: start_services_if_configured() to helpers.sh for reuse
+- Fixed: pnpm PATH automatically added to claude-auto-launch
+- Changed: helpers.sh v2.8 → v2.9
+- Behavior: `claude-auto launch` now does start → wait → open browsers
+- Verified: Services start correctly with pnpm in PATH
+
+**v3.6** (February 16, 2026)
+- Fixed: claude-auto launch now works (3 critical bugs resolved)
+- Fixed: Config paths now include apps/ prefix (services can start)
+- Added: load_project_config() bridge function (v3.x → v2.x format)
+- Fixed: wait_for_all_services() supports unlimited services (was limited to 3)
+- Fixed: launch_browser_tabs() supports unlimited URLs (was limited to 3)
+- Fixed: claude-auto-launch now calls load_config before load_project_config
+- Changed: helpers.sh v2.7 → v2.8
+- Verified: End-to-end test with 3/4 services healthy, correct timeout behavior
+
+**v3.5** (February 16, 2026)
+- Fixed: claude-auto-audit now exits 0 when audit completes (v2.2)
+- Changed: Exit code indicates audit execution status, not issue detection
+- Removed: Dead code after exit (unreachable v2.1 health checks)
+- Reason: Wrapper expects exit 0 on successful completion per design
 
 **v3.4** (January 14, 2026)
 - Fixed: Corrected permission format (removed incorrect parentheses)

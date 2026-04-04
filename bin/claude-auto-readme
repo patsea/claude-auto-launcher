@@ -5,6 +5,8 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="$HOME/.claude-auto/logs"
 LOG_FILE="$LOG_DIR/readme-$(date +%Y-%m-%d).log"
+HEARTBEAT_SCRIPT="/Users/pwilliamson/Dropbox/ALOMA/claude-code/infra/scripts/local-cron-heartbeat.sh"
+START_TIME=$(date +%s)
 
 mkdir -p "$LOG_DIR"
 
@@ -12,6 +14,18 @@ echo "=== README Auto-Update $(date) ===" >> "$LOG_FILE"
 
 # Run updater
 "$SCRIPT_DIR/lib/update-readme-auto.sh" "$HOME/Dropbox/ALOMA/claude-code" >> "$LOG_FILE" 2>&1
+EXIT_CODE=$?
 
 echo "=== Update Complete ===" >> "$LOG_FILE"
 echo "" >> "$LOG_FILE"
+
+# Report heartbeat
+DURATION=$(($(date +%s) - START_TIME))
+if [[ -x "$HEARTBEAT_SCRIPT" ]]; then
+    STATUS="success"
+    [[ $EXIT_CODE -ne 0 ]] && STATUS="failure"
+    "$HEARTBEAT_SCRIPT" "claude-auto-readme" "$STATUS" "$DURATION"
+    echo "Heartbeat recorded: claude-auto-readme ($STATUS) - duration ${DURATION}s" >> "$LOG_FILE"
+fi
+
+exit $EXIT_CODE

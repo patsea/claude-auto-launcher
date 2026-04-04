@@ -9,6 +9,8 @@ source "$SCRIPT_DIR/lib/config.sh"
 
 LOG_FILE="/tmp/claude-auto-nightly-$(date +%Y-%m-%d).log"
 SUMMARY=""
+HEARTBEAT_SCRIPT="/Users/pwilliamson/Dropbox/ALOMA/claude-code/infra/scripts/local-cron-heartbeat.sh"
+START_TIME=$(date +%s)
 
 log() {
     echo "[$(date '+%H:%M:%S')] $1" | tee -a "$LOG_FILE"
@@ -231,6 +233,13 @@ main() {
 
     log ""
     log "=== Complete ==="
+
+    # Report heartbeat
+    DURATION=$(($(date +%s) - START_TIME))
+    if [[ -x "$HEARTBEAT_SCRIPT" ]]; then
+        "$HEARTBEAT_SCRIPT" "claude-auto-nightly" "success" "$DURATION"
+        log "Heartbeat recorded (duration: ${DURATION}s)"
+    fi
 
     echo ""
     echo "Log: $LOG_FILE"
