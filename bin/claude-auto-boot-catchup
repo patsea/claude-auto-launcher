@@ -36,35 +36,55 @@ if [ -f "$LAST_RUN_FILE" ]; then
     fi
 fi
 
-# Check if any cron jobs were missed (boot was during cron hours)
-BOOT_HOUR=$(date -r "$BOOT_TIME" '+%H')
-BOOT_DAY=$(date -r "$BOOT_TIME" '+%u')  # 1=Monday, 7=Sunday
+# Check if any cron jobs were missed: "today's slot has passed AND the job hasn't run today".
+# Times below are LOCAL — the user crontab runs in system TZ, so we match.
+# Slot hours derived from the live crontab at execution time (re-derive on crontab change):
+#   audit            : 08:00 local   (0 8 * * *)
+#   model-tasks      : 08:15 local   (15 8 * * *)
+#   weekly-research  : 08:30 local   (30 8 * * *)  — daily, NOT Monday-only
+#   backup           : 08:45 local   (45 8 * * *)  — cleanup is COUPLED (runs iff backup catchup fires)
+# 'readme' has no crontab entry (handled by LaunchAgent com.claude-auto.readme) — no catchup gate.
+
+HEARTBEAT_FILE="$HOME/Dropbox/ALOMA/claude-code/infra/state/claude-auto-heartbeats.json"
+LOCAL_TODAY="$(date +%Y-%m-%d)"
+LOCAL_MIDNIGHT_EPOCH="$(date -j -f '%Y-%m-%d %H:%M:%S' "${LOCAL_TODAY} 00:00:00" '+%s')"
+NOW_EPOCH="$(date +%s)"
+
+# Helper: did the named heartbeat job run since today's local midnight?
+ran_today_heartbeat() {
+    local key="$1" ep
+    ep=$(jq -r ".\"${key}\".epoch // 0" "$HEARTBEAT_FILE" 2>/dev/null || echo 0)
+    [ "$ep" -ge "$LOCAL_MIDNIGHT_EPOCH" ]
+}
+
+# Helper: has today's HH:MM local slot already passed?
+slot_passed() {
+    local hhmm="$1" slot_epoch
+    slot_epoch=$(date -j -f '%Y-%m-%d %H:%M:%S' "${LOCAL_TODAY} ${hhmm}:00" '+%s')
+    [ "$NOW_EPOCH" -ge "$slot_epoch" ]
+}
 
 MISSED_JOBS=()
 
-# Check 2:00 AM jobs (backup, cleanup)
-if [ "$BOOT_HOUR" -le 2 ]; then
-    MISSED_JOBS+=("backup" "cleanup")
-fi
-
-# Check 2:30 AM job (README updates)
-if [ "$BOOT_HOUR" -le 2 ] || ([ "$BOOT_HOUR" -eq 2 ] && [ "$(date -r "$BOOT_TIME" '+%M')" -lt 30 ]); then
-    MISSED_JOBS+=("readme")
-fi
-
-# Check 3:00 AM job (model tasks)
-if [ "$BOOT_HOUR" -le 3 ]; then
-    MISSED_JOBS+=("model-tasks")
-fi
-
-# Check 8:00 AM job (audit)
-if [ "$BOOT_HOUR" -le 8 ]; then
+# audit — dated log artefact is the definitive ran-today signal.
+if slot_passed '08:00' && [ ! -f "$HOME/.claude-auto/logs/audit-${LOCAL_TODAY}.log" ]; then
     MISSED_JOBS+=("audit")
 fi
 
-# Check 9:00 AM Monday job (weekly research)
-if [ "$BOOT_DAY" -eq 1 ] && [ "$BOOT_HOUR" -le 9 ]; then
+# model-tasks — heartbeat key 'aloma-model-tasks'.
+if slot_passed '08:15' && ! ran_today_heartbeat 'aloma-model-tasks'; then
+    MISSED_JOBS+=("model-tasks")
+fi
+
+# weekly-research — heartbeat key 'weekly-research'. Daily in crontab; no Monday-only constraint.
+if slot_passed '08:30' && ! ran_today_heartbeat 'weekly-research'; then
     MISSED_JOBS+=("weekly-research")
+fi
+
+# backup — heartbeat key 'aloma-backup'. cleanup is COUPLED to backup catchup per
+# Patrick decision 2026-06-01 (no independent heartbeat key or dated artefact for cleanup).
+if slot_passed '08:45' && ! ran_today_heartbeat 'aloma-backup'; then
+    MISSED_JOBS+=("backup" "cleanup")
 fi
 
 # Exit if no missed jobs
@@ -87,10 +107,6 @@ for job in "${MISSED_JOBS[@]}"; do
         cleanup)
             log "Running: Instruction file cleanup"
             "$HOME/.claude-auto/bin/claude-auto-cleanup" >> "$LOG_FILE" 2>&1
-            ;;
-        readme)
-            log "Running: README updates"
-            "$HOME/.claude-auto/bin/claude-auto-readme" >> "$LOG_FILE" 2>&1
             ;;
         model-tasks)
             log "Running: Model task generation"
