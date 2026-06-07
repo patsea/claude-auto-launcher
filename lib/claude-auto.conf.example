@@ -7,7 +7,7 @@ CLAUDE_AUTO_BEST_PRACTICES=""
 
 # === GIT REPOSITORIES ===
 # Space-separated list of repo paths to manage (relative to WORKDIR)
-CLAUDE_AUTO_REPOS=""
+CLAUDE_AUTO_REPOS=" nextlane"
 
 # === SERVICES (optional) ===
 # Format: "name:port:start_command:health_endpoint"
