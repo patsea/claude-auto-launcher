@@ -74,3 +74,13 @@ Edit SOURCE files in THIS directory, then run `./install.sh`
 - Fixed: Port 3000 health check now accepts 307 redirects
 - Auth-protected services (Workflow Automation) properly handled
 - More accurate service status reporting
+
+---
+
+## Non-Negotiable Gate — ALOMA MCP NEVER
+
+NEVER call any tool prefixed with `aloma_` or `aloma-admin_` in this session.
+These tools connect directly to the production ALOMA database.
+Use the ALOMA CLI only. If an aloma_ tool appears in the tool list: do not
+call it, state the rule, stop.
+

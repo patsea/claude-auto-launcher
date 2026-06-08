@@ -1,6 +1,8 @@
 #!/bin/bash
-# claude-auto v3.4 - Config-driven Claude Code launcher
+# claude-auto v3.6 - Config-driven Claude Code launcher
 # v3.4: Correct permission format (no parentheses for allow-all)
+# v3.5: Project args (jsa|devops|wa|llm|coredev) + help command
+# v3.6: Added nextlane project + real `list` command implementation
 
 set -euo pipefail
 
@@ -9,8 +11,86 @@ source "$SCRIPT_DIR/lib/config.sh"
 source "$SCRIPT_DIR/lib/helpers.sh" 2>/dev/null || true
 
 
+# Handle help
+if [ "${1:-}" = "help" ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    echo ""
+    echo "claude-auto v3.6 — Config-Driven Claude Code Launcher"
+    echo ""
+    echo "USAGE"
+    echo "  claude-auto [project]          Launch Claude Code in the specified project directory"
+    echo "  claude-auto [project] launch   Start project services and open browser tabs"
+    echo "  claude-auto launch             Start default project services (from config)"
+    echo "  claude-auto list               Show all available project names"
+    echo "  claude-auto help               Show this help"
+    echo ""
+    echo "PROJECTS"
+    echo "  devops    ~/Dropbox/ALOMA/claude-code/"
+    echo "            Loads: all MCPs (Kubernetes, Azure, Cloudflare, GitHub, Keycloak, n8n)"
+    echo "            Use for: AKS infra, Flux GitOps, CRDB, NATS, Azure operations"
+    echo ""
+    echo "  jsa       ~/Dropbox/ALOMA/claude-code/job-search-agent/"
+    echo "            Loads: Attio, Gmail, Granola, Notion, GitHub, ALOMA MCPs only"
+    echo "            Use for: outreach pipeline, contact research, email scanning"
+    echo ""
+    echo "  wa        ~/Dropbox/ALOMA/claude-code/apps/workflow-automation/"
+    echo "            Loads: ALOMA, n8n, GitHub, Notion, Attio, Gmail (ALOMA account)"
+    echo "            Use for: ALOMA workflow studio, n8n automation development"
+    echo ""
+    echo "  llm       ~/Dropbox/ALOMA/claude-code/apps/llm-council/"
+    echo "            Loads: GitHub, Notion only"
+    echo "            Use for: LLM Council prompt evaluation and testing"
+    echo ""
+    echo "  alomastep ~/Dropbox/ALOMA/claude-code/aloma-step-writing/"
+    echo "            Loads: project .mcp.json (if present)"
+    echo "            Use for: ALOMA step-writing reference docs and examples"
+    echo ""
+    echo "  coredev   ~/Dropbox/ALOMA/claude-code/aloma-core-development/"
+    echo "            Loads: project .mcp.json (if present)"
+    echo "            Use for: ALOMA platform core development"
+    echo ""
+    echo "  nextlane  ~/Dropbox/ALOMA/claude-code/nextlane/"
+    echo "            Loads: project .mcp.json (if present)"
+    echo "            Use for: Nextlane interim CPO engagement — board deck, OEM strategy, AI vision"
+    echo ""
+    echo "  (no arg)  Uses CLAUDE_AUTO_WORKDIR from ~/.claude-auto.conf"
+    echo "            Default project as configured"
+    echo ""
+    echo "MCP LOADING"
+    echo "  Each project loads only its own .mcp.json — Kubernetes/Cloudflare/Keycloak"
+    echo "  do NOT load for jsa, wa, or llm sessions."
+    echo "  DevOps session loads all MCPs (use for infra work only)."
+    echo ""
+    echo "SERVICES (launch subcommand)"
+    echo "  claude-auto launch        Start services defined in ~/.claude-auto.conf"
+    echo "  claude-auto jsa launch    Start JSA services (dashboard, agents) + open browser"
+    echo ""
+    echo "CONFIG"
+    echo "  Config file:  ~/.claude-auto.conf"
+    echo "  Log file:     /tmp/claude-auto-startup.log"
+    echo "  Tail log:     tail -f /tmp/claude-auto-startup.log"
+    echo ""
+    exit 0
+fi
+
+# Handle 'list' subcommand — print all registered projects and exit
+if [ "${1:-}" = "list" ]; then
+    echo ""
+    echo "claude-auto — registered projects:"
+    echo ""
+    printf "  %-10s %s\n" "devops"    "$HOME/Dropbox/ALOMA/claude-code/"
+    printf "  %-10s %s\n" "jsa"       "$HOME/Dropbox/ALOMA/claude-code/job-search-agent/"
+    printf "  %-10s %s\n" "wa"        "$HOME/Dropbox/ALOMA/claude-code/apps/workflow-automation/"
+    printf "  %-10s %s\n" "llm"       "$HOME/Dropbox/ALOMA/claude-code/apps/llm-council/"
+    printf "  %-10s %s\n" "alomastep" "$HOME/Dropbox/ALOMA/claude-code/aloma-step-writing/"
+    printf "  %-10s %s\n" "coredev"   "$HOME/Dropbox/ALOMA/claude-code/aloma-core-development/"
+    printf "  %-10s %s\n" "nextlane"  "$HOME/Dropbox/ALOMA/claude-code/nextlane/"
+    echo ""
+    exit 0
+fi
+
 # Handle 'launch' subcommand
-if [ "${1:-}" = "launch" ]; then
+# Supports: claude-auto launch  OR  claude-auto <project> launch
+if [ "${1:-}" = "launch" ] || [ "${2:-}" = "launch" ]; then
     exec "$SCRIPT_DIR/bin/claude-auto-launch"
 fi
 STARTUP_LOG="/tmp/claude-auto-startup.log"
@@ -18,7 +98,7 @@ STARTUP_LOG="/tmp/claude-auto-startup.log"
 print_banner() {
     echo ""
     echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║  claude-auto v3.4 - Config-Driven Claude Code Launcher       ║"
+    echo "║  claude-auto v3.5 - Config-Driven Claude Code Launcher       ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo ""
 }
@@ -84,6 +164,25 @@ quick_git_status() {
 main() {
     print_banner
     load_config
+
+    # Project override: claude-auto [project]
+    # Overrides CLAUDE_AUTO_WORKDIR from config for this session only
+    local project="${1:-}"
+    case "$project" in
+        devops)  CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code" ;;
+        jsa)     CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/job-search-agent" ;;
+        wa)      CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/apps/workflow-automation" ;;
+        llm)     CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/apps/llm-council" ;;
+        alomastep) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/aloma-step-writing" ;;
+        coredev) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/aloma-core-development" ;;
+        nextlane) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/nextlane" ;;
+        ""|launch|help|--help|-h|list) ;;  # handled above or use config default
+        *) echo "⚠️  Unknown project: '$project'"; echo "Run 'claude-auto help' for valid options"; exit 1 ;;
+    esac
+    if [[ -n "$project" && ! "$project" =~ ^(launch|help|--help|-h|list)$ ]]; then
+        echo "🎯 Project: $project → $CLAUDE_AUTO_WORKDIR"
+    fi
+
     echo "=== claude-auto startup $(date) ===" > "$STARTUP_LOG"
     cd "$CLAUDE_AUTO_WORKDIR"
     echo "📂 Working directory: $CLAUDE_AUTO_WORKDIR"
