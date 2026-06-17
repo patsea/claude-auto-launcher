@@ -1,4 +1,5 @@
 #!/bin/bash
+GIT_CHANGES_PENDING=0
 # cleanup-instruction-files.sh v3.0 - Instruction file cleanup
 # v3.0 (Jan 30, 2026): Only scan instructions/ directory, use _archive/instructions/
 # v2.3 (Jan 28, 2026): Clarified docs/ directory exclusion with explicit comment
@@ -24,10 +25,14 @@ if [[ -d "$INSTRUCTIONS_DIR" ]]; then
         # Archive to _archive/instructions/ with date prefix if not already prefixed
         if [[ "$name" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
             # Already has date prefix, keep it
-            mv "$file" "$ARCHIVE_DIR/$name" 2>/dev/null && ((ARCHIVED++))
+            mv "$file" "$ARCHIVE_DIR/$name"
+            git -C "$CLAUDE_CODE_DIR" rm --cached "$file" 2>/dev/null || true
+            GIT_CHANGES_PENDING=1 2>/dev/null && ((ARCHIVED++))
         else
             # Add date prefix
-            mv "$file" "$ARCHIVE_DIR/$(date +%Y%m%d)-$name" 2>/dev/null && ((ARCHIVED++))
+            mv "$file" "$ARCHIVE_DIR/$(date +%Y%m%d)-$name"
+            git -C "$CLAUDE_CODE_DIR" rm --cached "$file" 2>/dev/null || true
+            GIT_CHANGES_PENDING=1 2>/dev/null && ((ARCHIVED++))
         fi
         echo "  [ARCHIVED] $file" >> "$LOG"
     done < <(find "$INSTRUCTIONS_DIR" -name "*.md" -type f -mtime +30 -print0 2>/dev/null)
@@ -72,4 +77,9 @@ done < <(find "$HOME/.claude-auto/logs" "$CLAUDE_CODE_DIR/infra" -name "*.log" -
 DELETED_LOGS=$(find "$HOME/.claude-auto/logs" "$CLAUDE_CODE_DIR/infra" -name "*.log.gz" -type f -mtime +30 -delete -print 2>/dev/null | wc -l | tr -d ' ')
 
 echo "[$(date '+%H:%M:%S')] Logs: $COMPRESSED compressed, $DELETED_LOGS deleted" >> "$LOG"
+# Reconcile git after archiving (prevent deleted-on-disk drift)
+if [ "${GIT_CHANGES_PENDING:-0}" -eq 1 ]; then
+  git -C "${CLAUDE_CODE_DIR}" commit -m "chore: archive >30d instruction files (nightly cleanup)" --no-verify 2>/dev/null || true
+fi
+
 echo "[$(date '+%H:%M:%S')] Cleanup complete" >> "$LOG"
