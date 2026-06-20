@@ -52,6 +52,10 @@ if [ "${1:-}" = "help" ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
     echo "            Loads: project .mcp.json (if present)"
     echo "            Use for: Nextlane interim CPO engagement — board deck, OEM strategy, AI vision"
     echo ""
+    echo "  adev      ~/Dropbox/ALOMA/claude-code-dev/"
+    echo "            Loads: project .mcp.json (if present)"
+    echo "            Use for: ALOMA Platform Track 2 dev (AEH builds, MCP, connectors, apps)"
+    echo ""
     echo "  (no arg)  Uses CLAUDE_AUTO_WORKDIR from ~/.claude-auto.conf"
     echo "            Default project as configured"
     echo ""
@@ -84,6 +88,7 @@ if [ "${1:-}" = "list" ]; then
     printf "  %-10s %s\n" "alomastep" "$HOME/Dropbox/ALOMA/claude-code/aloma-step-writing/"
     printf "  %-10s %s\n" "coredev"   "$HOME/Dropbox/ALOMA/claude-code/aloma-core-development/"
     printf "  %-10s %s\n" "nextlane"  "$HOME/Dropbox/ALOMA/claude-code/nextlane/"
+    printf "  %-10s %s\n" "adev"      "$HOME/Dropbox/ALOMA/claude-code-dev/"
     echo ""
     exit 0
 fi
@@ -176,6 +181,7 @@ main() {
         alomastep) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/aloma-step-writing" ;;
         coredev) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/aloma-core-development" ;;
         nextlane) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/nextlane" ;;
+        adev)    CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code-dev" ;;
         ""|launch|help|--help|-h|list) ;;  # handled above or use config default
         *) echo "⚠️  Unknown project: '$project'"; echo "Run 'claude-auto help' for valid options"; exit 1 ;;
     esac
