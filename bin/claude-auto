@@ -1,7 +1,7 @@
 #!/bin/bash
 # claude-auto v3.6 - Config-driven Claude Code launcher
 # v3.4: Correct permission format (no parentheses for allow-all)
-# v3.5: Project args (jsa|devops|wa|llm|coredev) + help command
+# v3.5: Project args (jsa|devops|wa|llm) + help command
 # v3.6: Added nextlane project + real `list` command implementation
 
 set -euo pipefail
@@ -44,10 +44,6 @@ if [ "${1:-}" = "help" ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
     echo "            Loads: project .mcp.json (if present)"
     echo "            Use for: ALOMA step-writing reference docs and examples"
     echo ""
-    echo "  coredev   ~/Dropbox/ALOMA/claude-code/aloma-core-development/"
-    echo "            Loads: project .mcp.json (if present)"
-    echo "            Use for: ALOMA platform core development"
-    echo ""
     echo "  nextlane  ~/Dropbox/ALOMA/claude-code/nextlane/"
     echo "            Loads: project .mcp.json (if present)"
     echo "            Use for: Nextlane interim CPO engagement — board deck, OEM strategy, AI vision"
@@ -86,7 +82,6 @@ if [ "${1:-}" = "list" ]; then
     printf "  %-10s %s\n" "wa"        "$HOME/Dropbox/ALOMA/claude-code/apps/workflow-automation/"
     printf "  %-10s %s\n" "llm"       "$HOME/Dropbox/ALOMA/claude-code/apps/llm-council/"
     printf "  %-10s %s\n" "alomastep" "$HOME/Dropbox/ALOMA/claude-code/aloma-step-writing/"
-    printf "  %-10s %s\n" "coredev"   "$HOME/Dropbox/ALOMA/claude-code/aloma-core-development/"
     printf "  %-10s %s\n" "nextlane"  "$HOME/Dropbox/ALOMA/claude-code/nextlane/"
     printf "  %-10s %s\n" "adev"      "$HOME/Dropbox/ALOMA/claude-code-dev/"
     echo ""
@@ -179,7 +174,6 @@ main() {
         wa)      CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/apps/workflow-automation" ;;
         llm)     CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/apps/llm-council" ;;
         alomastep) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/aloma-step-writing" ;;
-        coredev) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/aloma-core-development" ;;
         nextlane) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/nextlane" ;;
         adev)    CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code-dev" ;;
         ""|launch|help|--help|-h|list) ;;  # handled above or use config default
