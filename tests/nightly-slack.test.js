@@ -45,12 +45,12 @@ let d, env;
 beforeEach(() => {
   d = fs.mkdtempSync(path.join(os.tmpdir(), 'nightly-test-'));
   const bin = path.join(d, 'bin'); fs.mkdirSync(bin);
-  // Fake Keychain: exactly one item, service oura-slack-webhook + account aloma (the shared
+  // Fake Keychain: exactly one item, service daily-jobs-slack-webhook + account aloma (the shared
   // #daily-job-updates webhook), present only when STUB_WEBHOOK is set. Any other lookup fails.
   fs.writeFileSync(path.join(bin, 'security'), [
     '#!/bin/bash',
     'svc=""; acct=""; while [ $# -gt 0 ]; do case "$1" in -s) svc="$2"; shift;; -a) acct="$2"; shift;; esac; shift; done',
-    'if [ "$svc" = "oura-slack-webhook" ] && [ "$acct" = "aloma" ] && [ -n "$STUB_WEBHOOK" ]; then printf \'%s\\n\' "$STUB_WEBHOOK"; exit 0; fi',
+    'if [ "$svc" = "daily-jobs-slack-webhook" ] && [ "$acct" = "aloma" ] && [ -n "$STUB_WEBHOOK" ]; then printf \'%s\\n\' "$STUB_WEBHOOK"; exit 0; fi',
     'exit 44', ''].join('\n'));
   fs.chmodSync(path.join(bin, 'security'), 0o755);
   // Heartbeat stub: records "job status".
@@ -126,7 +126,7 @@ describe('send_slack_summary judges Slack\'s reply body, not curl\'s exit code',
   it('Keychain item absent: NOT delivered, nothing posted, rc 2, heartbeat failure', async () => {
     const r = await nightly({ status: 200, body: 'ok' }, { STUB_WEBHOOK: '' });
     assertNotDelivered(r);
-    assert.match(r.out, /webhook unreadable \(Keychain service oura-slack-webhook, account aloma\)/);
+    assert.match(r.out, /webhook unreadable \(Keychain service daily-jobs-slack-webhook, account aloma\)/);
     assert.equal(requests.length, 0);
   });
 

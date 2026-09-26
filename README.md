@@ -91,7 +91,7 @@ claude-auto
 | `CLAUDE_AUTO_SERVICES` | `()` | Array of services to start |
 | `CLAUDE_AUTO_BROWSER_URLS` | `()` | URLs to open after services start |
 | `CLAUDE_AUTO_SLACK_ENABLED` | true | Post the nightly report to Slack |
-| `CLAUDE_AUTO_SLACK_KEYCHAIN_SERVICE` | `oura-slack-webhook` | Keychain service holding the Slack incoming webhook (never put the webhook in this file) |
+| `CLAUDE_AUTO_SLACK_KEYCHAIN_SERVICE` | `daily-jobs-slack-webhook` | Keychain service holding the Slack incoming webhook (never put the webhook in this file) |
 | `CLAUDE_AUTO_SLACK_KEYCHAIN_ACCOUNT` | `aloma` | Keychain account of that item |
 | `CLAUDE_AUTO_COMMIT_ENABLED` | false | Enable nightly auto-commit |
 | `CLAUDE_AUTO_DISCOVERY_PATHS` | - | Paths to scan for new repos |
@@ -293,7 +293,7 @@ heartbeat records a failed run, and the script exits 2.
 
 ```bash
 # store (prompts for the value, so it never lands in shell history)
-security add-generic-password -s oura-slack-webhook -a aloma -w
+security add-generic-password -s daily-jobs-slack-webhook -a aloma -w
 
 # delivery test from the real code path: the header carries the marker
 CLAUDE_AUTO_TEST_MARKER="SELF-TEST" claude-auto-nightly
