@@ -19,8 +19,11 @@ CLAUDE_AUTO_SERVICES=()
 CLAUDE_AUTO_BROWSER_URLS=()
 
 # === NIGHTLY MAINTENANCE ===
-# Slack webhook for notifications (optional)
-CLAUDE_AUTO_SLACK_WEBHOOK=""
+# Slack nightly report. The webhook is a credential and is read from the macOS Keychain,
+# never from this file:  security add-generic-password -s <service> -a <account> -w
+CLAUDE_AUTO_SLACK_ENABLED="false"
+CLAUDE_AUTO_SLACK_KEYCHAIN_SERVICE="oura-slack-webhook"
+CLAUDE_AUTO_SLACK_KEYCHAIN_ACCOUNT="aloma"
 
 # Auto-commit settings
 CLAUDE_AUTO_COMMIT_ENABLED="false"

@@ -7,9 +7,10 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$SCRIPT_DIR/lib/config.sh"
 
-LOG_FILE="/tmp/claude-auto-nightly-$(date +%Y-%m-%d).log"
+LOG_FILE="${CLAUDE_AUTO_NIGHTLY_LOG:-/tmp/claude-auto-nightly-$(date +%Y-%m-%d).log}"
 SUMMARY=""
-HEARTBEAT_SCRIPT="/Users/pwilliamson/Dropbox/ALOMA/claude-code/infra/scripts/local-cron-heartbeat.sh"
+HEARTBEAT_SCRIPT="${CLAUDE_AUTO_HEARTBEAT_SCRIPT:-/Users/pwilliamson/Dropbox/ALOMA/claude-code/infra/scripts/local-cron-heartbeat.sh}"
+SLACK_DELIVERY_FAILED=0
 START_TIME=$(date +%s)
 
 log() {
@@ -168,13 +169,46 @@ cleanup_logs() {
     [[ $deleted -gt 0 ]] && log "  🗑️  Deleted $deleted old logs" || true
 }
 
+# The Slack webhook is a credential: it is read from the macOS Keychain, never from the config
+# file (a CLAUDE_AUTO_SLACK_WEBHOOK line there is ignored).
+# Webhook: Keychain service "oura-slack-webhook", account "aloma" = the #daily-job-updates incoming webhook.
+# SHARED on purpose (Patrick, 26 Sep 2026) with the health-ingestion flow
+# (~/Dropbox/Personal/Medical/_tools/oura_notify.py, LaunchAgent com.aloma.oura-ingest).
+# Revoking, rotating or renaming that item breaks BOTH senders; update both together.
+# CLAUDE_AUTO_SLACK_KEYCHAIN_SERVICE / _ACCOUNT (config or env) select a different item.
+read_slack_webhook() {
+    security find-generic-password -s "${CLAUDE_AUTO_SLACK_KEYCHAIN_SERVICE:-oura-slack-webhook}" \
+        -a "${CLAUDE_AUTO_SLACK_KEYCHAIN_ACCOUNT:-aloma}" -w 2>/dev/null || true
+}
+
+# Delivered ONLY when Slack's reply is HTTP 200 with the body `ok`. A dead webhook answers
+# HTTP 200 with `no_service`, so curl's exit code proves nothing (this used to log "sent" on the
+# exit code alone). Anything else sets SLACK_DELIVERY_FAILED, which finish_run reports as a
+# failed run. Never prints the webhook.
 send_slack_summary() {
-    [[ -z "${CLAUDE_AUTO_SLACK_WEBHOOK:-}" ]] && return
+    if [[ "${CLAUDE_AUTO_SLACK_ENABLED:-true}" != "true" ]]; then
+        log "  ⏭️  Slack summary disabled (CLAUDE_AUTO_SLACK_ENABLED)"
+        return 0
+    fi
 
     log "=== Sending Slack Summary ==="
+    if [[ -n "${CLAUDE_AUTO_SLACK_WEBHOOK:-}" ]]; then
+        log "  ⚠️  CLAUDE_AUTO_SLACK_WEBHOOK in the config file is ignored: the webhook is read from the Keychain"
+    fi
+
+    local webhook
+    webhook=$(read_slack_webhook)
+    if [[ -z "$webhook" ]]; then
+        log "  ❌ Slack summary NOT delivered: webhook unreadable (Keychain service ${CLAUDE_AUTO_SLACK_KEYCHAIN_SERVICE:-oura-slack-webhook}, account ${CLAUDE_AUTO_SLACK_KEYCHAIN_ACCOUNT:-aloma})"
+        SLACK_DELIVERY_FAILED=1
+        return 1
+    fi
 
     # Escape for JSON
     local escaped_summary=$(echo -e "$SUMMARY" | sed 's/"/\\"/g' | tr '\n' ' ')
+    local header="🌙 Claude-Auto Nightly Report"
+    # CLAUDE_AUTO_TEST_MARKER: a delivery test's marker text, prefixed to the header.
+    [[ -n "${CLAUDE_AUTO_TEST_MARKER:-}" ]] && header="${CLAUDE_AUTO_TEST_MARKER} ${header}"
 
     local payload=$(cat <<EOF
 {
@@ -183,7 +217,7 @@ send_slack_summary() {
             "type": "header",
             "text": {
                 "type": "plain_text",
-                "text": "🌙 Claude-Auto Nightly Report",
+                "text": "${header}",
                 "emoji": true
             }
         },
@@ -199,13 +233,45 @@ send_slack_summary() {
 EOF
 )
 
-    if curl -s -X POST -H 'Content-type: application/json' \
-        --data "$payload" \
-        "$CLAUDE_AUTO_SLACK_WEBHOOK" >/dev/null 2>&1; then
-        log "  ✅ Slack notification sent"
-    else
-        log "  ❌ Slack notification failed"
+    local errf resp http rc=0 err
+    errf=$(mktemp "${TMPDIR:-/tmp}/claude-auto-slack.XXXXXX")
+    resp=$(curl -sS -m 20 -w $'\n%{http_code}' -X POST -H 'Content-type: application/json' \
+        --data "$payload" "$webhook" 2>"$errf") || rc=$?
+    http="${resp##*$'\n'}"
+    resp="${resp%$'\n'*}"
+    err=$(head -c 200 "$errf" | tr '\n' ' ')
+    rm -f "$errf"
+
+    if [[ $rc -ne 0 ]]; then
+        log "  ❌ Slack summary NOT delivered: curl exit $rc (${err//"$webhook"/<webhook>})"
+        SLACK_DELIVERY_FAILED=1
+        return 1
     fi
+    if [[ "$http" != "200" || "$resp" != "ok" ]]; then
+        local snip="${resp:0:120}"
+        log "  ❌ Slack summary NOT delivered: HTTP $http, body '${snip:-EMPTY}' (Slack answers 'ok' only on delivery)"
+        SLACK_DELIVERY_FAILED=1
+        return 1
+    fi
+    log "  ✅ Slack summary delivered (HTTP 200, body: ok)"
+    return 0
+}
+
+# Heartbeat and exit status. A summary that was not delivered is a FAILED run: the heartbeat says
+# failure, so the monitoring that reads it reports this job somewhere other than the channel that
+# just failed, and the script exits 2.
+finish_run() {
+    local status=success rc=0
+    if [[ "$SLACK_DELIVERY_FAILED" -eq 1 ]]; then
+        status=failure
+        rc=2
+    fi
+    DURATION=$(($(date +%s) - START_TIME))
+    if [[ -x "$HEARTBEAT_SCRIPT" ]]; then
+        "$HEARTBEAT_SCRIPT" "claude-auto-nightly" "$status" "$DURATION"
+        log "Heartbeat recorded: $status (duration: ${DURATION}s)"
+    fi
+    return $rc
 }
 
 main() {
@@ -234,15 +300,14 @@ main() {
     log ""
     log "=== Complete ==="
 
-    # Report heartbeat
-    DURATION=$(($(date +%s) - START_TIME))
-    if [[ -x "$HEARTBEAT_SCRIPT" ]]; then
-        "$HEARTBEAT_SCRIPT" "claude-auto-nightly" "success" "$DURATION"
-        log "Heartbeat recorded (duration: ${DURATION}s)"
-    fi
-
     echo ""
     echo "Log: $LOG_FILE"
+
+    finish_run
 }
 
-main "$@"
+# Run only when executed, so tests can source this file and call its functions.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+    exit $?
+fi

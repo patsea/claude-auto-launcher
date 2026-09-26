@@ -90,7 +90,9 @@ claude-auto
 | `CLAUDE_AUTO_BEST_PRACTICES` | - | Path to best practices file for Claude |
 | `CLAUDE_AUTO_SERVICES` | `()` | Array of services to start |
 | `CLAUDE_AUTO_BROWSER_URLS` | `()` | URLs to open after services start |
-| `CLAUDE_AUTO_SLACK_WEBHOOK` | - | Slack webhook for nightly reports |
+| `CLAUDE_AUTO_SLACK_ENABLED` | true | Post the nightly report to Slack |
+| `CLAUDE_AUTO_SLACK_KEYCHAIN_SERVICE` | `oura-slack-webhook` | Keychain service holding the Slack incoming webhook (never put the webhook in this file) |
+| `CLAUDE_AUTO_SLACK_KEYCHAIN_ACCOUNT` | `aloma` | Keychain account of that item |
 | `CLAUDE_AUTO_COMMIT_ENABLED` | false | Enable nightly auto-commit |
 | `CLAUDE_AUTO_DISCOVERY_PATHS` | - | Paths to scan for new repos |
 
@@ -282,12 +284,19 @@ launchctl load ~/Library/LaunchAgents/com.claude-auto.nightly.plist
 claude-auto-nightly
 ```
 
-### Test Slack Webhook
+### Slack Webhook
+
+The nightly report reads its Slack incoming webhook from the macOS Keychain, never from the
+config file. It counts as delivered only when Slack answers HTTP 200 with the body `ok`; any
+other answer (for example `no_service` from a revoked webhook) is logged as NOT delivered, the
+heartbeat records a failed run, and the script exits 2.
 
 ```bash
-curl -X POST -H 'Content-type: application/json' \
-    --data '{"text":"Test from claude-auto"}' \
-    "$CLAUDE_AUTO_SLACK_WEBHOOK"
+# store (prompts for the value, so it never lands in shell history)
+security add-generic-password -s oura-slack-webhook -a aloma -w
+
+# delivery test from the real code path: the header carries the marker
+CLAUDE_AUTO_TEST_MARKER="SELF-TEST" claude-auto-nightly
 ```
 
 ---

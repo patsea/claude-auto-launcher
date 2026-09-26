@@ -8,9 +8,15 @@ Edit SOURCE files in THIS directory, then run `./install.sh`
 | lib/helpers.sh | ~/.claude-auto/lib/helpers.sh |
 | lib/status-helpers.sh | ~/.claude-auto/lib/status-helpers.sh |
 
-## Version: 3.8
+## Version: 3.9
 
 ### Changelog
+
+**v3.9** (September 26, 2026)
+- Fixed: claude-auto-nightly logged "Slack notification sent" on curl's exit code alone; a revoked webhook answers HTTP 200 `no_service`, so a lost report still read as sent
+- Changed: the report counts as delivered only on HTTP 200 with the body `ok`; anything else is logged NOT delivered, the heartbeat records `failure`, and the script exits 2
+- Changed: the webhook is read from the macOS Keychain (service `oura-slack-webhook`, account `aloma`, shared on purpose with the health-ingestion flow); `CLAUDE_AUTO_SLACK_WEBHOOK` in the config file is ignored
+- Added: tests/nightly-slack.test.js (node --test, local stub server, the real functions sourced)
 
 **v3.8** (February 16, 2026)
 - Fixed: claude-auto-nightly now reports heartbeats (resolved stale job alerts)
