@@ -28,7 +28,7 @@ if [ "${1:-}" = "help" ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
     echo "            Loads: all MCPs (Kubernetes, Azure, Cloudflare, GitHub, Keycloak, n8n)"
     echo "            Use for: AKS infra, Flux GitOps, CRDB, NATS, Azure operations"
     echo ""
-    echo "  jsa       ~/Dropbox/ALOMA/claude-code/job-search-agent/"
+    echo "  jsa       ~/Dropbox/repos/personal/job-search-agent/"
     echo "            Loads: Attio, Gmail, Granola, Notion, GitHub, ALOMA MCPs only"
     echo "            Use for: outreach pipeline, contact research, email scanning"
     echo ""
@@ -82,7 +82,7 @@ if [ "${1:-}" = "list" ]; then
     echo "claude-auto — registered projects:"
     echo ""
     printf "  %-10s %s\n" "devops"    "$HOME/Dropbox/ALOMA/claude-code/"
-    printf "  %-10s %s\n" "jsa"       "$HOME/Dropbox/ALOMA/claude-code/job-search-agent/"
+    printf "  %-10s %s\n" "jsa"       "$HOME/Dropbox/repos/personal/job-search-agent/"
     printf "  %-10s %s\n" "wa"        "$HOME/Dropbox/repos/aloma/workflow-automation/"
     printf "  %-10s %s\n" "llm"       "$HOME/Dropbox/repos/personal/llm-council/"
     printf "  %-10s %s\n" "alomastep" "$HOME/Dropbox/ALOMA/claude-code/aloma-step-writing/"
@@ -176,7 +176,7 @@ main() {
     local project="${1:-}"
     case "$project" in
         devops)  CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code" ;;
-        jsa)     CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/job-search-agent" ;;
+        jsa)     CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/repos/personal/job-search-agent" ;;
         wa)      CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/repos/aloma/workflow-automation" ;;
         llm)     CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/repos/personal/llm-council" ;;
         alomastep) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/aloma-step-writing" ;;
