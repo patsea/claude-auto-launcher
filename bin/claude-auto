@@ -44,7 +44,7 @@ if [ "${1:-}" = "help" ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
     echo "            Loads: project .mcp.json (if present)"
     echo "            Use for: ALOMA step-writing reference docs and examples"
     echo ""
-    echo "  nextlane  ~/Dropbox/ALOMA/claude-code/nextlane/"
+    echo "  nextlane  ~/Dropbox/Personal/claude-projects/nextlane/"
     echo "            Loads: project .mcp.json (if present)"
     echo "            Use for: Nextlane interim CPO engagement — board deck, OEM strategy, AI vision"
     echo ""
@@ -86,7 +86,7 @@ if [ "${1:-}" = "list" ]; then
     printf "  %-10s %s\n" "wa"        "$HOME/Dropbox/repos/aloma/workflow-automation/"
     printf "  %-10s %s\n" "llm"       "$HOME/Dropbox/repos/personal/llm-council/"
     printf "  %-10s %s\n" "alomastep" "$HOME/Dropbox/ALOMA/claude-code/aloma-step-writing/"
-    printf "  %-10s %s\n" "nextlane"  "$HOME/Dropbox/ALOMA/claude-code/nextlane/"
+    printf "  %-10s %s\n" "nextlane"  "$HOME/Dropbox/Personal/claude-projects/nextlane/"
     printf "  %-10s %s\n" "adev"      "$HOME/Dropbox/repos/aloma/claude-code-dev/"
     printf "  %-10s %s\n" "newdev"    "$HOME/Dropbox/repos/personal/newdev/"
     echo ""
@@ -180,7 +180,7 @@ main() {
         wa)      CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/repos/aloma/workflow-automation" ;;
         llm)     CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/repos/personal/llm-council" ;;
         alomastep) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/aloma-step-writing" ;;
-        nextlane) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/nextlane" ;;
+        nextlane) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/Personal/claude-projects/nextlane" ;;
         adev)    CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/repos/aloma/claude-code-dev" ;;
         newdev)  CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/repos/personal/newdev" ;;
         ""|launch|help|--help|-h|list) ;;  # handled above or use config default
