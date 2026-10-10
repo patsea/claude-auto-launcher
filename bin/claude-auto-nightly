@@ -13,6 +13,17 @@ HEARTBEAT_SCRIPT="${CLAUDE_AUTO_HEARTBEAT_SCRIPT:-/Users/pwilliamson/Dropbox/ALO
 SLACK_DELIVERY_FAILED=0
 START_TIME=$(date +%s)
 
+# CLAUDE_AUTO_REPOS entries are absolute paths (~/... allowed) or paths relative to CLAUDE_AUTO_WORKDIR.
+# Absolute entries since 10 Oct 2026, when the git working copies moved to ~/Dropbox/repos/<group>/
+# (INTENT-REPO-DISK-LAYOUT-20261010). A relative entry still resolves as before.
+repo_dir() {
+    case "$1" in
+        /*) printf '%s' "$1" ;;
+        "~/"*) printf '%s' "$HOME/${1#\~/}" ;;
+        *) printf '%s' "$CLAUDE_AUTO_WORKDIR/$1" ;;
+    esac
+}
+
 log() {
     echo "[$(date '+%H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
@@ -26,8 +37,8 @@ convert_remotes_to_ssh() {
     local converted=0
 
     for repo in $CLAUDE_AUTO_REPOS; do
-        if [[ -d "$CLAUDE_AUTO_WORKDIR/$repo/.git" ]]; then
-            cd "$CLAUDE_AUTO_WORKDIR/$repo"
+        if [[ -d "$(repo_dir "$repo")/.git" ]]; then
+            cd "$(repo_dir "$repo")"
             remote_url=$(git remote get-url origin 2>/dev/null || echo "")
 
             if [[ "$remote_url" == https://github.com/* ]]; then
@@ -47,8 +58,8 @@ security_scan() {
     local issues=0
 
     for repo in $CLAUDE_AUTO_REPOS; do
-        if [[ -d "$CLAUDE_AUTO_WORKDIR/$repo/.git" ]]; then
-            cd "$CLAUDE_AUTO_WORKDIR/$repo"
+        if [[ -d "$(repo_dir "$repo")/.git" ]]; then
+            cd "$(repo_dir "$repo")"
 
             # Skip venv, node_modules, docs, examples
             matches=$(git diff --cached --diff-filter=ACMR -U0 2>/dev/null | \
@@ -82,8 +93,8 @@ auto_commit() {
     local skipped=0
 
     for repo in $CLAUDE_AUTO_REPOS; do
-        if [[ -d "$CLAUDE_AUTO_WORKDIR/$repo/.git" ]]; then
-            cd "$CLAUDE_AUTO_WORKDIR/$repo"
+        if [[ -d "$(repo_dir "$repo")/.git" ]]; then
+            cd "$(repo_dir "$repo")"
 
             changes=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
             [[ $changes -eq 0 ]] && continue
@@ -143,7 +154,8 @@ discover_repos() {
 
     [[ -z "${CLAUDE_AUTO_DISCOVERY_PATHS:-}" ]] && return
 
-    local known_repos=" $CLAUDE_AUTO_REPOS "
+    local known_repos=" " r
+    for r in $CLAUDE_AUTO_REPOS; do known_repos+="$(basename "$r") "; done
 
     for scan_path in $CLAUDE_AUTO_DISCOVERY_PATHS; do
         scan_path=$(eval echo "$scan_path")

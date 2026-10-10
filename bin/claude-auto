@@ -32,11 +32,11 @@ if [ "${1:-}" = "help" ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
     echo "            Loads: Attio, Gmail, Granola, Notion, GitHub, ALOMA MCPs only"
     echo "            Use for: outreach pipeline, contact research, email scanning"
     echo ""
-    echo "  wa        ~/Dropbox/ALOMA/claude-code/apps/workflow-automation/"
+    echo "  wa        ~/Dropbox/repos/aloma/workflow-automation/"
     echo "            Loads: ALOMA, n8n, GitHub, Notion, Attio, Gmail (ALOMA account)"
     echo "            Use for: ALOMA workflow studio, n8n automation development"
     echo ""
-    echo "  llm       ~/Dropbox/ALOMA/claude-code/apps/llm-council/"
+    echo "  llm       ~/Dropbox/repos/personal/llm-council/"
     echo "            Loads: GitHub, Notion only"
     echo "            Use for: LLM Council prompt evaluation and testing"
     echo ""
@@ -48,11 +48,11 @@ if [ "${1:-}" = "help" ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
     echo "            Loads: project .mcp.json (if present)"
     echo "            Use for: Nextlane interim CPO engagement — board deck, OEM strategy, AI vision"
     echo ""
-    echo "  adev      ~/Dropbox/ALOMA/claude-code-dev/"
+    echo "  adev      ~/Dropbox/repos/aloma/claude-code-dev/"
     echo "            Loads: project .mcp.json (if present)"
     echo "            Use for: ALOMA platform development (AEH builds, MCP, connectors, apps)"
     echo ""
-    echo "  newdev    ~/Dropbox/ALOMA/newdev/"
+    echo "  newdev    ~/Dropbox/repos/personal/newdev/"
     echo "            Loads: project .mcp.json (if present)"
     echo "            Use for: Non-ALOMA development (personal tools, client work, general software)"
     echo ""
@@ -83,12 +83,12 @@ if [ "${1:-}" = "list" ]; then
     echo ""
     printf "  %-10s %s\n" "devops"    "$HOME/Dropbox/ALOMA/claude-code/"
     printf "  %-10s %s\n" "jsa"       "$HOME/Dropbox/ALOMA/claude-code/job-search-agent/"
-    printf "  %-10s %s\n" "wa"        "$HOME/Dropbox/ALOMA/claude-code/apps/workflow-automation/"
-    printf "  %-10s %s\n" "llm"       "$HOME/Dropbox/ALOMA/claude-code/apps/llm-council/"
+    printf "  %-10s %s\n" "wa"        "$HOME/Dropbox/repos/aloma/workflow-automation/"
+    printf "  %-10s %s\n" "llm"       "$HOME/Dropbox/repos/personal/llm-council/"
     printf "  %-10s %s\n" "alomastep" "$HOME/Dropbox/ALOMA/claude-code/aloma-step-writing/"
     printf "  %-10s %s\n" "nextlane"  "$HOME/Dropbox/ALOMA/claude-code/nextlane/"
-    printf "  %-10s %s\n" "adev"      "$HOME/Dropbox/ALOMA/claude-code-dev/"
-    printf "  %-10s %s\n" "newdev"    "$HOME/Dropbox/ALOMA/newdev/"
+    printf "  %-10s %s\n" "adev"      "$HOME/Dropbox/repos/aloma/claude-code-dev/"
+    printf "  %-10s %s\n" "newdev"    "$HOME/Dropbox/repos/personal/newdev/"
     echo ""
     exit 0
 fi
@@ -157,8 +157,9 @@ quick_git_status() {
     [[ -z "${CLAUDE_AUTO_REPOS:-}" ]] && return  # Variable not set
     echo "=== Quick Git Status ===" >> "$STARTUP_LOG"
     for repo in $CLAUDE_AUTO_REPOS; do
-        [[ -d "$CLAUDE_AUTO_WORKDIR/$repo/.git" ]] || continue
-        cd "$CLAUDE_AUTO_WORKDIR/$repo"
+        local rdir; case "$repo" in /*) rdir="$repo" ;; "~/"*) rdir="$HOME/${repo#\~/}" ;; *) rdir="$CLAUDE_AUTO_WORKDIR/$repo" ;; esac
+        [[ -d "$rdir/.git" ]] || continue
+        cd "$rdir"
         changes=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
         unpushed=$(git log --oneline @{u}..HEAD 2>/dev/null | wc -l | tr -d ' ')
         [[ "$changes" -gt 0 || "$unpushed" -gt 0 ]] && echo "⚠️  $repo: $changes uncommitted, $unpushed unpushed" >> "$STARTUP_LOG"
@@ -176,12 +177,12 @@ main() {
     case "$project" in
         devops)  CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code" ;;
         jsa)     CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/job-search-agent" ;;
-        wa)      CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/apps/workflow-automation" ;;
-        llm)     CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/apps/llm-council" ;;
+        wa)      CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/repos/aloma/workflow-automation" ;;
+        llm)     CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/repos/personal/llm-council" ;;
         alomastep) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/aloma-step-writing" ;;
         nextlane) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/nextlane" ;;
-        adev)    CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code-dev" ;;
-        newdev)  CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/newdev" ;;
+        adev)    CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/repos/aloma/claude-code-dev" ;;
+        newdev)  CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/repos/personal/newdev" ;;
         ""|launch|help|--help|-h|list) ;;  # handled above or use config default
         *) echo "⚠️  Unknown project: '$project'"; echo "Run 'claude-auto help' for valid options"; exit 1 ;;
     esac
