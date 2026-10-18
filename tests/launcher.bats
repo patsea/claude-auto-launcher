@@ -31,7 +31,7 @@ teardown() {
 
 @test "all bin scripts have valid bash syntax" {
   for script in "$SCRIPT_DIR"/bin/claude-auto*; do
-    if [ -f "$script" ] && [[ ! "$script" =~ \.backup$ ]]; then
+    if [ -f "$script" ] && [[ ! "$script" =~ \.(backup|scpt)$ ]]; then
       run bash -n "$script"
       [ "$status" -eq 0 ]
     fi
@@ -40,7 +40,7 @@ teardown() {
 
 @test "all lib scripts have valid bash syntax" {
   for script in "$SCRIPT_DIR"/lib/*.sh; do
-    if [ -f "$script" ] && [[ ! "$script" =~ \.backup$ ]]; then
+    if [ -f "$script" ] && [[ ! "$script" =~ \.(backup|scpt)$ ]]; then
       run bash -n "$script"
       [ "$status" -eq 0 ]
     fi
