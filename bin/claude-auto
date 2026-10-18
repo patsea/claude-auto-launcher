@@ -52,6 +52,10 @@ if [ "${1:-}" = "help" ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
     echo "            Loads: project .mcp.json (if present)"
     echo "            Use for: ALOMA platform development (AEH builds, MCP, connectors, apps)"
     echo ""
+    echo "  medical   ~/Dropbox/Personal/Medical/"
+    echo "            Loads: project .mcp.json (if present)"
+    echo "            Use for: Personal medical records and admin (Personal space)"
+    echo ""
     echo "  newdev    ~/Dropbox/repos/personal/newdev/"
     echo "            Loads: project .mcp.json (if present)"
     echo "            Use for: Non-ALOMA development (personal tools, client work, general software)"
@@ -88,6 +92,7 @@ if [ "${1:-}" = "list" ]; then
     printf "  %-10s %s\n" "alomastep" "$HOME/Dropbox/ALOMA/claude-code/aloma-step-writing/"
     printf "  %-10s %s\n" "nextlane"  "$HOME/Dropbox/Personal/claude-projects/nextlane/"
     printf "  %-10s %s\n" "adev"      "$HOME/Dropbox/repos/aloma/claude-code-dev/"
+    printf "  %-10s %s\n" "medical"   "$HOME/Dropbox/Personal/Medical/"
     printf "  %-10s %s\n" "newdev"    "$HOME/Dropbox/repos/personal/newdev/"
     echo ""
     exit 0
@@ -182,6 +187,7 @@ main() {
         alomastep) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/ALOMA/claude-code/aloma-step-writing" ;;
         nextlane) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/Personal/claude-projects/nextlane" ;;
         adev)    CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/repos/aloma/claude-code-dev" ;;
+        medical) CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/Personal/Medical" ;;
         newdev)  CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/repos/personal/newdev" ;;
         ""|launch|help|--help|-h|list) ;;  # handled above or use config default
         *) echo "⚠️  Unknown project: '$project'"; echo "Run 'claude-auto help' for valid options"; exit 1 ;;

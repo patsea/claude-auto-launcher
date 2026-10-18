@@ -59,3 +59,12 @@ teardown() {
 @test "status-helpers.sh exists" {
   [ -f "$SCRIPT_DIR/lib/status-helpers.sh" ]
 }
+
+@test "medical project is registered in help, list and the project switch" {
+  run "$BATS_TEST_DIRNAME/../bin/claude-auto" list
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"medical"*"Dropbox/Personal/Medical/"* ]]
+  run "$BATS_TEST_DIRNAME/../bin/claude-auto" help
+  [[ "$output" == *"medical   ~/Dropbox/Personal/Medical/"* ]]
+  grep -q 'medical) *CLAUDE_AUTO_WORKDIR="$HOME/Dropbox/Personal/Medical"' "$BATS_TEST_DIRNAME/../bin/claude-auto"
+}
