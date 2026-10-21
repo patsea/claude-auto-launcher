@@ -124,8 +124,17 @@ auto_commit() {
                 '*PLAN*.md' '*plan*.md' '*BRIEFING*.md' '*briefing*.md' '*TEST_SCRIPT*.md' \
                 '*test_script*.md' 'ALOMA*.md' 2>/dev/null || true
 
-            # Verify no ALOMA references in staged files
-            if git diff --cached | grep -qi "aloma"; then
+            # Verify no ALOMA references in staged files. Read the WHOLE staged diff first, then search it:
+            # `git diff --cached | grep -q` under pipefail let git take SIGPIPE on a diff over ~64 KB, so a
+            # match read as "none" and the commit went through (Pitfall 778 sweep, 21 Oct 2026). A diff that
+            # cannot be read is a skip, never a pass (fail closed).
+            if ! staged_diff=$(git diff --cached 2>/dev/null); then
+                log "  ⚠️  $repo: Skipped - could not read the staged diff, so the ALOMA check could not run"
+                git reset HEAD >/dev/null 2>&1
+                ((skipped++)) || true
+                continue
+            fi
+            if grep -qi "aloma" <<<"$staged_diff"; then
                 log "  ⚠️  $repo: Skipped - ALOMA reference detected in changes"
                 git reset HEAD >/dev/null 2>&1
                 ((skipped++)) || true

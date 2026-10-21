@@ -77,3 +77,45 @@ describe('CLAUDE_AUTO_REPOS: absolute and relative entries', () => {
     assert.deepEqual(r.stdout.trim().split('\n'), ['/h/x/y', '/a/b', '/w/c/d']);
   });
 });
+
+// The "no company references" guard before an automatic commit and push (Pitfall 778 sweep, 21 Oct 2026).
+// It was `git diff --cached | grep -qi <word>` under `set -uo pipefail`: once the staged diff outgrew the
+// pipe, git took SIGPIPE, the `if` read false and the guard let the commit through. The word is built at
+// run time so this file never carries it.
+describe('the company-reference guard reads the whole staged diff and fails closed', () => {
+  const WORD = ['al', 'oma'].join('');
+  beforeEach(() => { T = fs.mkdtempSync(path.join(os.tmpdir(), 'nightly-guard-')); });
+  afterEach(() => { fs.rmSync(T, { recursive: true, force: true }); });
+
+  it('a staged diff over 64 KB with a reference near the top is NOT committed', () => {
+    const dir = path.join(T, 'repos', 'personal', 'bigrepo');
+    const remote = fixtureRepo(dir);
+    const filler = 'ordinary line of personal notes with nothing to hide in it at all\n'.repeat(20000);
+    fs.writeFileSync(path.join(dir, 'b.txt'), `${WORD} mentioned here\n${filler}`);   // ~1.3 MB
+    const r = runAutoCommit(dir, T);
+    assert.deepEqual(pushed(remote), ['init'], `must not commit or push:\n${r.stdout}${r.stderr}`);
+    assert.match(fs.readFileSync(path.join(T, 'nightly.log'), 'utf8'), /reference detected/);
+    assert.equal(git(dir, 'diff', '--cached', '--name-only').trim(), '', 'staging is reset');
+  });
+
+  it('a staged diff that cannot be read is NOT committed (fails closed)', () => {
+    const dir = path.join(T, 'repos', 'personal', 'unreadable');
+    const remote = fixtureRepo(dir);
+    const bin = path.join(T, 'bin'); fs.mkdirSync(bin);
+    const realGit = execFileSync('/usr/bin/which', ['git'], { encoding: 'utf8' }).trim();
+    fs.writeFileSync(path.join(bin, 'git'),
+      `#!/bin/bash\n[ "$1" = diff ] && [ "$2" = --cached ] && exit 128\nexec "${realGit}" "$@"\n`, { mode: 0o755 });
+    const script = `source "${NIGHTLY}"; CLAUDE_AUTO_WORKDIR="${T}"; CLAUDE_AUTO_REPOS="${dir}"; CLAUDE_AUTO_COMMIT_ENABLED=true; auto_commit`;
+    const r = spawnSync('/bin/bash', ['-c', script], { encoding: 'utf8',
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, CLAUDE_AUTO_NIGHTLY_LOG: path.join(T, 'nightly.log'), HOME: T } });
+    assert.deepEqual(pushed(remote), ['init'], `must not commit or push:\n${r.stdout}${r.stderr}`);
+    assert.match(fs.readFileSync(path.join(T, 'nightly.log'), 'utf8'), /could not read the staged diff/);
+  });
+
+  it('a small clean change is still committed and pushed', () => {
+    const dir = path.join(T, 'repos', 'personal', 'clean');
+    const remote = fixtureRepo(dir);
+    runAutoCommit(dir, T);
+    assert.equal(pushed(remote).length, 2);
+  });
+});
