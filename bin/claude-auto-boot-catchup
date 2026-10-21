@@ -36,19 +36,20 @@ if [ -f "$LAST_RUN_FILE" ]; then
     fi
 fi
 
-# Check if any cron jobs were missed: "today's slot has passed AND the job hasn't run today".
-# Times below are LOCAL — the user crontab runs in system TZ, so we match.
-# Slot hours derived from the live crontab at execution time (re-derive on crontab change):
-#   audit            : 08:00 local   (0 8 * * *)
-#   model-tasks      : 08:15 local   (15 8 * * *)
-#   weekly-research  : 08:30 local   (30 8 * * *)  — daily, NOT Monday-only
-#   backup           : 08:45 local   (45 8 * * *)  — cleanup is COUPLED (runs iff backup catchup fires)
-# 'readme' has no crontab entry (handled by LaunchAgent com.claude-auto.readme) — no catchup gate.
+# Check if any jobs were missed: "today's slot has passed AND the job hasn't run today". Times are LOCAL.
+#   audit   : 08:00 local (crontab 0 8 * * *); ran-today signal: its dated log
+#   cleanup : 08:45 local; it has no ran-today signal of its own, so it keeps the gate it had when it was
+#             coupled to the backup catch-up (Patrick 2026-06-01): the backup slot passed and the backup did
+#             not run today.
+# NOT here (option A, Patrick 21 Oct 2026): model-tasks and backup - the DevOps missed-slot reaper catches
+# them up through the retry wrapper - and weekly-research, retired 10 Oct. Their calls pointed at paths that
+# no longer exist; the foreground one exited 127 and, under set -e, ended the run before cleanup and the marker.
+# 'readme' has no crontab entry (handled by LaunchAgent com.claude-auto.readme) - no catch-up gate.
 
 HEARTBEAT_FILE="$HOME/Dropbox/ALOMA/claude-code/infra/state/claude-auto-heartbeats.json"
 LOCAL_TODAY="$(date +%Y-%m-%d)"
 LOCAL_MIDNIGHT_EPOCH="$(date -j -f '%Y-%m-%d %H:%M:%S' "${LOCAL_TODAY} 00:00:00" '+%s')"
-NOW_EPOCH="$(date +%s)"
+NOW_EPOCH="${BOOT_CATCHUP_NOW:-$(date +%s)}"   # BOOT_CATCHUP_NOW: tests only
 
 # Helper: did the named heartbeat job run since today's local midnight?
 ran_today_heartbeat() {
@@ -65,29 +66,13 @@ slot_passed() {
 }
 
 MISSED_JOBS=()
-
-# audit — dated log artefact is the definitive ran-today signal.
 if slot_passed '08:00' && [ ! -f "$HOME/.claude-auto/logs/audit-${LOCAL_TODAY}.log" ]; then
     MISSED_JOBS+=("audit")
 fi
-
-# model-tasks — heartbeat key 'aloma-model-tasks'.
-if slot_passed '08:15' && ! ran_today_heartbeat 'aloma-model-tasks'; then
-    MISSED_JOBS+=("model-tasks")
-fi
-
-# weekly-research — heartbeat key 'weekly-research'. Daily in crontab; no Monday-only constraint.
-if slot_passed '08:30' && ! ran_today_heartbeat 'weekly-research'; then
-    MISSED_JOBS+=("weekly-research")
-fi
-
-# backup — heartbeat key 'aloma-backup'. cleanup is COUPLED to backup catchup per
-# Patrick decision 2026-06-01 (no independent heartbeat key or dated artefact for cleanup).
 if slot_passed '08:45' && ! ran_today_heartbeat 'aloma-backup'; then
-    MISSED_JOBS+=("backup" "cleanup")
+    MISSED_JOBS+=("cleanup")
 fi
 
-# Exit if no missed jobs
 if [ ${#MISSED_JOBS[@]} -eq 0 ]; then
     log "No missed cron jobs. All scheduled tasks will run normally."
     echo "$BOOT_TIME" > "$LAST_RUN_FILE"
@@ -95,40 +80,29 @@ if [ ${#MISSED_JOBS[@]} -eq 0 ]; then
 fi
 
 log "Detected ${#MISSED_JOBS[@]} missed job(s): ${MISSED_JOBS[*]}"
-log "Running catch-up tasks..."
 
-# Run missed jobs
+# Each job on its own: a missing or failing target is logged with its exit code and never stops the
+# next job or the marker.
+run_job() {
+    local name="$1"; shift
+    local rc=0
+    log "Running: $name"
+    "$@" || rc=$?
+    if [ "$rc" -eq 0 ]; then log "$name: ok (exit 0)"; else log "$name: FAILED (exit $rc)"; fi
+}
+
 for job in "${MISSED_JOBS[@]}"; do
     case "$job" in
-        backup)
-            log "Running: ALOMA backup"
-            /Users/pwilliamson/Dropbox/ALOMA/claude-code/aloma-backup.sh >> /Users/pwilliamson/Dropbox/ALOMA/claude-code/aloma-backup.log 2>&1 &
-            ;;
-        cleanup)
-            log "Running: Instruction file cleanup"
-            "$HOME/.claude-auto/bin/claude-auto-cleanup" >> "$LOG_FILE" 2>&1
-            ;;
-        model-tasks)
-            log "Running: Model task generation"
-            /opt/homebrew/bin/bash /Users/pwilliamson/Dropbox/ALOMA/claude-code/aloma-model-tasks.sh >> /Users/pwilliamson/Dropbox/ALOMA/claude-code/aloma-backup/model-tasks-cron.log 2>&1
-            ;;
-        audit)
-            log "Running: System audit"
-            "$HOME/.claude-auto/bin/claude-auto-audit" --no-color > "$HOME/.claude-auto/logs/audit-$(date +%Y-%m-%d).log" 2>&1
-            ;;
-        weekly-research)
-            log "Running: Weekly AI research (Monday only)"
-            cd /Users/pwilliamson/Dropbox/ALOMA/claude-code/workflow-automation && npx tsx scripts/weekly-research.ts >> /Users/pwilliamson/Dropbox/ALOMA/claude-code/workflow-automation/logs/research.log 2>&1 &
-            ;;
+        audit)   run_job audit   bash -c '"$HOME/.claude-auto/bin/claude-auto-audit" --no-color > "$HOME/.claude-auto/logs/audit-$(date +%Y-%m-%d).log" 2>&1' ;;
+        cleanup) run_job cleanup bash -c '"$HOME/.claude-auto/bin/claude-auto-cleanup" >> "$HOME/.claude-auto/logs/boot-catchup.log" 2>&1' ;;
     esac
 done
 
-# Record this run
+# Record this run, whatever the jobs did.
 echo "$BOOT_TIME" > "$LAST_RUN_FILE"
 
 log "=========================================="
 log "Boot Catch-Up Complete"
-log "Note: Backup may still be running in background"
 log "=========================================="
 
 exit 0
